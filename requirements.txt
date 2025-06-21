@@ -11,3 +11,9 @@ python-dotenv==1.0.1
 httpx==0.25.2
 waitress==2.1.2
 
+# Deployment additions
+gunicorn==22.0.0
+boto3==1.34.111
+Flask-SQLAlchemy==3.1.1
+psycopg2-binary==2.9.9
+
