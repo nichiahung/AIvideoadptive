@@ -24,16 +24,30 @@ function initializeTabs() {
 
 // 處理轉換模式變化
 function handleConversionModeChange(event) {
-    const selectedMode = event.target.value;
+    // 現在只是記錄選擇，不立即切換界面
+    console.log('Selected conversion mode:', event.target.value);
+}
+
+// 處理開始轉換設定按鈕
+function handleProceedWithMode() {
+    const selectedMode = document.querySelector('input[name="conversionMode"]:checked').value;
     
-    // 隱藏所有轉換內容
+    // 隱藏轉換模式選擇區域
+    document.getElementById('conversionModeSection').style.display = 'none';
+    
+    // 顯示轉換設定區域
+    document.getElementById('conversionSection').style.display = 'block';
+    
+    // 首先隱藏所有轉換內容
     document.querySelectorAll('.conversion-content').forEach(content => {
+        content.style.display = 'none';
         content.classList.remove('active');
     });
     
-    // 顯示選擇的轉換內容
+    // 只顯示選擇的轉換內容
     const targetSection = document.getElementById(`${selectedMode}ConversionSection`);
     if (targetSection) {
+        targetSection.style.display = 'block';
         targetSection.classList.add('active');
         
         // 根據模式設置相應的功能
@@ -41,8 +55,26 @@ function handleConversionModeChange(event) {
             setupManualTab();
         } else if (selectedMode === 'position' && fileId) {
             setupPositionTab();
+        } else if (selectedMode === 'smart') {
+            // 設置智慧轉換模式
+            setupSmartConversionMode();
+            // 啟用自訂需求功能
+            enableCustomRequirementsAfterUpload();
         }
     }
+    
+    console.log(`Proceeding with ${selectedMode} conversion mode`);
+}
+
+// 處理返回轉換模式選擇
+function handleBackToModeSelection() {
+    // 隱藏轉換設定區域
+    document.getElementById('conversionSection').style.display = 'none';
+    
+    // 顯示轉換模式選擇區域
+    document.getElementById('conversionModeSection').style.display = 'block';
+    
+    console.log('Returning to conversion mode selection');
 }
 
 function initializeModal() {
@@ -50,11 +82,29 @@ function initializeModal() {
     const showHistoryBtn = document.getElementById('showHistoryBtn');
     const closeBtn = document.querySelector('.close-btn');
 
+    if (!modal) {
+        console.error('videoHistoryModal not found');
+        return;
+    }
+    
+    if (!showHistoryBtn) {
+        console.error('showHistoryBtn not found');
+        return;
+    }
+    
+    if (!closeBtn) {
+        console.error('close-btn not found');
+        return;
+    }
+
     showHistoryBtn.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
+        console.log('History button clicked'); // 調試日誌
+        
         window.AdaptVideo && window.AdaptVideo.resetUIForNewVideo ? window.AdaptVideo.resetUIForNewVideo() : null;
         modal.style.display = 'block';
+        
         if (window.AdaptVideoAPI && window.AdaptVideoAPI.loadVideoHistory) {
             window.AdaptVideoAPI.loadVideoHistory();
         } else {
@@ -109,6 +159,40 @@ function initializeEventListeners() {
     document.querySelectorAll('input[name="conversionMode"]').forEach(radio => {
         radio.addEventListener('change', handleConversionModeChange);
     });
+
+    // 自訂需求按鈕監聽器
+    const sendRequirementsBtn = document.getElementById('sendRequirementsBtn');
+    if (sendRequirementsBtn) {
+        sendRequirementsBtn.addEventListener('click', handleCustomRequirements);
+    }
+
+    // 自訂需求展開/收合按鈕監聽器
+    const toggleCustomRequirementsBtn = document.getElementById('toggleCustomRequirementsBtn');
+    if (toggleCustomRequirementsBtn) {
+        toggleCustomRequirementsBtn.addEventListener('click', toggleCustomRequirements);
+    }
+
+    // 開始轉換設定按鈕監聽器
+    const proceedWithModeBtn = document.getElementById('proceedWithModeBtn');
+    if (proceedWithModeBtn) {
+        proceedWithModeBtn.addEventListener('click', handleProceedWithMode);
+    }
+
+    // 返回轉換模式選擇按鈕監聽器
+    const backToModeSelectionSmart = document.getElementById('backToModeSelectionSmart');
+    if (backToModeSelectionSmart) {
+        backToModeSelectionSmart.addEventListener('click', handleBackToModeSelection);
+    }
+    
+    const backToModeSelectionManual = document.getElementById('backToModeSelectionManual');
+    if (backToModeSelectionManual) {
+        backToModeSelectionManual.addEventListener('click', handleBackToModeSelection);
+    }
+    
+    const backToModeSelectionPosition = document.getElementById('backToModeSelectionPosition');
+    if (backToModeSelectionPosition) {
+        backToModeSelectionPosition.addEventListener('click', handleBackToModeSelection);
+    }
 
     document.getElementById('convertBtnManual').addEventListener('click', () => {
         const cropMode = document.querySelector('input[name="cropModeManual"]:checked').value;
@@ -182,12 +266,8 @@ function handleFile(file) {
     selectedFile = file;
     fileId = null;
     
-    // 顯示轉換設定區域
-    document.getElementById('conversionSection').style.display = 'block';
-    
-    // 根據當前選擇的模式設置相應的內容
-    const selectedMode = document.querySelector('input[name="conversionMode"]:checked').value;
-    handleConversionModeChange({ target: { value: selectedMode } });
+    // 顯示轉換模式選擇區域
+    document.getElementById('conversionModeSection').style.display = 'block';
     
     if (window.AdaptVideoAPI && window.AdaptVideoAPI.uploadAndAnalyze) {
         window.AdaptVideoAPI.uploadAndAnalyze(file);
@@ -230,6 +310,13 @@ async function handleExistingVideo(fId, thumb, vInfo, filename) {
     }
     
     document.getElementById('videoPreview').style.display = 'block';
+    
+    // 顯示轉換模式選擇區域
+    const conversionModeSection = document.getElementById('conversionModeSection');
+    if (conversionModeSection) {
+        conversionModeSection.style.display = 'block';
+    }
+    
     if (window.AdaptVideo && window.AdaptVideo.showStatus) {
         window.AdaptVideo.showStatus('正在重新分析影片...', 'info');
     }
@@ -291,8 +378,6 @@ function handleAnalysisResult(result) {
     if (result.recommended_template_names && result.recommended_template_names.length > 0) {
         displayRecommendedTemplates(result.recommended_template_names, result.analysis_options);
     }
-    
-    document.getElementById('templatesSection').style.display = 'block';
 }
 
 function displaySubjects(subjects) {
@@ -336,18 +421,28 @@ function updateSelectedSubjects() {
 }
 
 function displayAIAnalysis(suggestions) {
+    // AI專業建議只在智慧轉換模式的AI推薦區塊中顯示
+    const smartContent = document.getElementById('smartConversionContent');
+    if (smartContent) {
+        const markdownContent = marked.parse(suggestions);
+        const analysisHTML = `
+            <div class="ai-analysis-section ai-analysis-overview">
+                <div class="ai-analysis-header">
+                    🤖 AI 專業建議
+                </div>
+                <div class="ai-analysis-content markdown-content">
+                    ${markdownContent}
+                </div>
+            </div>
+        `;
+        smartContent.innerHTML = analysisHTML;
+    }
+    
+    // 清空舊的aiAnalysisContent區域（不再需要）
     const container = document.getElementById('aiAnalysisContent');
-    const markdownContent = marked.parse(suggestions);
-    container.innerHTML = `
-        <div class="ai-analysis-section ai-analysis-overview">
-            <div class="ai-analysis-header">
-                🤖 AI 專業建議
-            </div>
-            <div class="ai-analysis-content markdown-content">
-                ${markdownContent}
-            </div>
-        </div>
-    `;
+    if (container) {
+        container.innerHTML = '';
+    }
 }
 
 function displayRecommendedTemplates(templateNames, analysisOptions) {
@@ -853,6 +948,233 @@ function resetManualPositionState() {
 
 // 導出重置函數到全域作用域
 window.resetManualPositionState = resetManualPositionState;
+window.clearConversationHistory = clearConversationHistory;
+window.handleConversionModeChange = handleConversionModeChange;
+window.showCustomRequirementsAfterAnalysis = showCustomRequirementsAfterAnalysis;
+
+// 啟用自訂需求功能（在AI分析完成後調用）
+function enableCustomRequirementsAfterUpload() {
+    // 檢查是否為智慧轉換模式
+    const selectedMode = document.querySelector('input[name="conversionMode"]:checked');
+    if (selectedMode && selectedMode.value === 'smart') {
+        const aiRequirementsSection = document.getElementById('aiCustomRequirementsSection');
+        const sendBtn = document.getElementById('sendRequirementsBtn');
+        
+        // 顯示自訂需求區域（但保持內容收合狀態）
+        if (aiRequirementsSection) {
+            aiRequirementsSection.style.display = 'block';
+        }
+        
+        // 啟用按鈕
+        if (sendBtn) {
+            sendBtn.disabled = false;
+        }
+        
+        // 確保內容區域保持收合狀態
+        const customRequirementsContent = document.getElementById('customRequirementsContent');
+        if (customRequirementsContent) {
+            customRequirementsContent.style.display = 'none';
+        }
+    }
+}
+
+// 在AI分析完成時顯示自訂需求區域
+function showCustomRequirementsAfterAnalysis() {
+    const selectedMode = document.querySelector('input[name="conversionMode"]:checked');
+    if (selectedMode && selectedMode.value === 'smart') {
+        const aiRequirementsSection = document.getElementById('aiCustomRequirementsSection');
+        if (aiRequirementsSection) {
+            aiRequirementsSection.style.display = 'block';
+        }
+    }
+}
+
+// === 自訂需求展開/收合功能 ===
+
+// 切換自訂需求區域的顯示/隱藏
+function toggleCustomRequirements() {
+    const content = document.getElementById('customRequirementsContent');
+    const toggleIcon = document.getElementById('toggleIcon');
+    const toggleBtn = document.getElementById('toggleCustomRequirementsBtn');
+    
+    if (!content || !toggleIcon || !toggleBtn) return;
+    
+    const isExpanded = content.style.display !== 'none';
+    
+    if (isExpanded) {
+        // 收合
+        content.style.display = 'none';
+        toggleIcon.textContent = '▼';
+        toggleBtn.innerHTML = '<span class="icon">📝</span>有特殊需求？點此展開自訂設定 <span id="toggleIcon" style="float: right;">▼</span>';
+    } else {
+        // 展開
+        content.style.display = 'block';
+        toggleIcon.textContent = '▲';
+        toggleBtn.innerHTML = '<span class="icon">📝</span>收合自訂需求設定 <span id="toggleIcon" style="float: right;">▲</span>';
+    }
+}
+
+// === 對話記憶功能 ===
+
+// 處理自訂需求
+async function handleCustomRequirements() {
+    const requirementsText = document.getElementById('customRequirements').value.trim();
+    const statusEl = document.getElementById('requirementsStatus');
+    const sendBtn = document.getElementById('sendRequirementsBtn');
+    
+    if (!requirementsText) {
+        statusEl.textContent = '請先輸入您的需求';
+        statusEl.style.color = 'var(--error)';
+        return;
+    }
+    
+    if (!fileId) {
+        statusEl.textContent = '請先上傳影片';
+        statusEl.style.color = 'var(--error)';
+        return;
+    }
+    
+    // 更新內部對話歷史（不顯示給用戶）
+    conversationHistory.push({
+        type: 'user',
+        message: requirementsText,
+        timestamp: new Date().toLocaleTimeString('zh-TW', { 
+            hour: '2-digit', 
+            minute: '2-digit' 
+        })
+    });
+    
+    // 更新按鈕狀態
+    sendBtn.disabled = true;
+    sendBtn.textContent = '🔄 分析中...';
+    statusEl.textContent = '正在處理您的需求...';
+    statusEl.style.color = 'var(--primary)';
+    
+    try {
+        // 調用 API 進行自訂需求分析
+        if (window.AdaptVideoAPI && window.AdaptVideoAPI.analyzeWithCustomRequirements) {
+            const response = await window.AdaptVideoAPI.analyzeWithCustomRequirements(fileId, requirementsText, conversationHistory);
+            
+            if (response.ai_response) {
+                // 添加 AI 回應到內部對話歷史（不顯示給用戶）
+                conversationHistory.push({
+                    type: 'ai',
+                    message: response.ai_response,
+                    timestamp: new Date().toLocaleTimeString('zh-TW', { 
+                        hour: '2-digit', 
+                        minute: '2-digit' 
+                    })
+                });
+            }
+            
+            // 更新推薦結果
+            if (response.recommendations) {
+                updateSmartConversionContent(response);
+            }
+            
+            statusEl.textContent = '分析完成！';
+            statusEl.style.color = 'var(--success)';
+            
+            // 保留需求內容，不清空輸入框
+            // document.getElementById('customRequirements').value = ''; // 移除此行
+            
+        } else {
+            throw new Error('API function not found');
+        }
+    } catch (error) {
+        console.error('Custom requirements analysis failed:', error);
+        statusEl.textContent = '分析失敗，請稍後再試';
+        statusEl.style.color = 'var(--error)';
+        
+        // 添加錯誤訊息到內部對話歷史
+        conversationHistory.push({
+            type: 'ai',
+            message: '抱歉，我暫時無法處理您的需求，請稍後再試。',
+            timestamp: new Date().toLocaleTimeString('zh-TW', { 
+                hour: '2-digit', 
+                minute: '2-digit' 
+            })
+        });
+    } finally {
+        // 恢復按鈕狀態
+        sendBtn.disabled = false;
+        sendBtn.textContent = '🚀 重新分析並推薦';
+        
+        // 3秒後清除狀態訊息
+        setTimeout(() => {
+            statusEl.textContent = '';
+        }, 3000);
+    }
+}
+
+
+// 清除對話歷史
+function clearConversationHistory() {
+    conversationHistory = [];
+    if (window.setGlobalVar) {
+        window.setGlobalVar('conversationHistory', conversationHistory);
+    }
+    
+    // 隱藏自訂需求區域
+    const aiRequirementsSection = document.getElementById('aiCustomRequirementsSection');
+    if (aiRequirementsSection) {
+        aiRequirementsSection.style.display = 'none';
+    }
+    
+    
+    // 清空自訂需求輸入框
+    const requirementsInput = document.getElementById('customRequirements');
+    if (requirementsInput) {
+        requirementsInput.value = '';
+    }
+    
+    // 清空狀態訊息並禁用按鈕
+    const statusEl = document.getElementById('requirementsStatus');
+    const sendBtn = document.getElementById('sendRequirementsBtn');
+    if (statusEl) {
+        statusEl.textContent = '';
+    }
+    if (sendBtn) {
+        sendBtn.disabled = true;
+    }
+}
+
+// 設置智慧轉換模式
+function setupSmartConversionMode() {
+    const smartContent = document.getElementById('smartConversionContent');
+    if (!smartContent) return;
+    
+    // AI專業建議只需要顯示載入狀態，實際內容由displayAIAnalysis函數處理
+    if (smartContent.innerHTML.trim() === '' || smartContent.innerHTML.includes('正在分析影片內容')) {
+        smartContent.innerHTML = `
+            <div class="spinner"></div>
+            <p style="text-align: center; color: var(--gray-500); margin-top: 12px;">正在載入 AI 專業建議...</p>
+        `;
+    }
+}
+
+// 更新智慧轉換內容（用於顯示自訂需求的結果）
+function updateSmartConversionContent(response) {
+    const contentEl = document.getElementById('smartConversionContent');
+    if (!contentEl) return;
+    
+    // 如果有新的AI分析建議，更新顯示
+    if (response.suggestions) {
+        // 更新AI專業建議內容（這與AI推薦結果是同一內容）
+        displayAIAnalysis(response.suggestions);
+    }
+    
+    // 如果有新的分析選項，更新主體選擇
+    if (response.analysis_options && response.analysis_options.length > 0) {
+        allSubjects = response.analysis_options;
+        displaySubjects(response.analysis_options);
+    }
+    
+    // 如果有新的推薦模板，更新模板顯示
+    if (response.recommended_template_names && response.recommended_template_names.length > 0) {
+        displayRecommendedTemplates(response.recommended_template_names, response.analysis_options);
+    }
+}
 
 function displayVideoComparison(comparisonData) {
     const comparisonContent = document.getElementById('comparisonContent');
@@ -1098,7 +1420,8 @@ window.AdaptVideoUI = {
     displayVideoComparison,
     initializeVideoComparison,
     loadHistoryPage,
-    setupManualTab
+    setupManualTab,
+    toggleCustomRequirements
 };
 
 // 將影片控制函數添加到全局作用域以便 HTML 調用

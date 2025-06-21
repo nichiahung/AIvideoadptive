@@ -403,6 +403,135 @@ body {
     display: block;
 }
 
+/* 確保只有選中的轉換內容顯示 */
+#conversionSection .conversion-content:not(.active) {
+    display: none !important;
+}
+
+/* === 轉換頁面標題和返回按鈕 === */
+.conversion-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.back-btn {
+    font-size: 13px;
+    padding: 6px 12px;
+    border: 1px solid var(--gray-300);
+    background: white;
+    color: var(--gray-600);
+    border-radius: var(--border-radius);
+    text-decoration: none;
+    transition: all 0.15s ease;
+}
+
+.back-btn:hover {
+    background: var(--gray-50);
+    border-color: var(--primary);
+    color: var(--primary);
+}
+
+.btn-outline {
+    background: transparent;
+    border: 1px solid var(--gray-300);
+    color: var(--gray-600);
+}
+
+.btn-outline:hover {
+    background: var(--gray-50);
+    border-color: var(--primary);
+    color: var(--primary);
+}
+
+.btn-sm {
+    font-size: 13px;
+    padding: 6px 12px;
+}
+
+/* === 自訂需求區域 === */
+.custom-requirements-section {
+    margin-top: 16px;
+}
+
+.custom-input-area {
+    background: var(--gray-50);
+    padding: 16px;
+    border-radius: var(--border-radius);
+    border: 1px solid var(--gray-200);
+}
+
+.custom-input-area textarea {
+    font-family: inherit;
+    line-height: 1.5;
+}
+
+.custom-input-area textarea:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
+}
+
+.input-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+/* === 對話記錄區域 === */
+.conversation-messages {
+    max-height: 300px;
+    overflow-y: auto;
+    background: var(--gray-50);
+    border-radius: var(--border-radius);
+    padding: 16px;
+    margin-top: 12px;
+}
+
+.conversation-message {
+    margin-bottom: 16px;
+    padding: 12px;
+    border-radius: 8px;
+    border-left: 3px solid var(--gray-300);
+}
+
+.conversation-message.user {
+    background: white;
+    border-left-color: var(--primary);
+    margin-left: 20px;
+}
+
+.conversation-message.ai {
+    background: var(--primary-light);
+    border-left-color: var(--primary);
+    margin-right: 20px;
+}
+
+.message-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.message-header .timestamp {
+    font-weight: normal;
+    color: var(--gray-500);
+    margin-left: auto;
+}
+
+.message-content {
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--gray-700);
+}
+
+.user-icon { color: var(--primary); }
+.ai-icon { color: var(--success); }
+
 /* === 版位選擇樣式 === */
 .position-options { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; }
 

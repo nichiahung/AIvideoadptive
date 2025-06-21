@@ -423,6 +423,52 @@ async function showVideoComparison() {
     }
 }
 
+// 自訂需求分析API (使用現有的 analyze 端點)
+async function analyzeWithCustomRequirements(fileId, requirements, conversationHistory) {
+    try {
+        // 將前端對話歷史格式轉換為後端期望的OpenAI格式
+        const convertedHistory = conversationHistory.map(item => ({
+            role: item.type === 'user' ? 'user' : 'assistant',
+            content: item.message
+        }));
+
+        // 添加新的用戶需求
+        convertedHistory.push({
+            role: 'user',
+            content: requirements
+        });
+
+        const response = await fetch('/api/analyze', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                file_id: fileId,
+                conversation_history: convertedHistory
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error(`分析失敗: ${response.status}`);
+        }
+
+        const result = await response.json();
+        
+        // 包裝結果以符合前端期望的格式
+        return {
+            ai_response: result.suggestions,
+            suggestions: result.suggestions,
+            analysis_options: result.analysis_options,
+            recommended_template_names: result.recommended_template_names,
+            recommendations: result // 完整的推薦結果
+        };
+    } catch (error) {
+        console.error('Failed to analyze with custom requirements:', error);
+        throw error;
+    }
+}
+
 // 導出到全域作用域
 window.AdaptVideoAPI = {
     loadAllTemplates,
@@ -435,5 +481,6 @@ window.AdaptVideoAPI = {
     fetchOriginalPreviewData,
     generateConvertedPreview,
     getVideoComparisonData,
-    showVideoComparison
+    showVideoComparison,
+    analyzeWithCustomRequirements
 };

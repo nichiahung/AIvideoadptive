@@ -31,6 +31,8 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeFileUpload();
     initializeEventListeners();
     loadAllTemplates();
+    
+    // 轉換模式現在是動態選擇，不需要初始化
 });
 
 // 工具函數
@@ -58,9 +60,17 @@ function resetUIForNewVideo() {
         window.resetManualPositionState();
     }
     
+    // 清除對話歷史
+    if (window.clearConversationHistory) {
+        window.clearConversationHistory();
+    }
+    
     document.getElementById('videoPreview').style.display = 'none';
-    document.getElementById('templatesSection').style.display = 'none';
     document.getElementById('statusMessage').style.display = 'none';
+    
+    // 重置轉換相關區域
+    const conversionSection = document.getElementById('conversionSection');
+    if (conversionSection) conversionSection.style.display = 'none';
     
     const videoThumbnail = document.getElementById('videoThumbnail');
     if (videoThumbnail) videoThumbnail.style.display = 'none';
@@ -76,6 +86,10 @@ function resetUIForNewVideo() {
     if (manualSelector) {
         manualSelector.style.display = 'none';
     }
+    
+    // 隱藏轉換模式選擇區域
+    const conversionModeSection = document.getElementById('conversionModeSection');
+    if (conversionModeSection) conversionModeSection.style.display = 'none';
 }
 
 function getOriginalFileName(fId) {
