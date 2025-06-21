@@ -158,8 +158,18 @@ async function handleExistingVideo(fId, thumb, vInfo, filename) {
     fileId = fId;
     originalFilename = filename || '';
     
+    // 更新全域變數
+    if (window.setGlobalVar) {
+        window.setGlobalVar('selectedFile', null);
+        window.setGlobalVar('fileId', fileId);
+        window.setGlobalVar('originalFilename', originalFilename);
+    }
+    
     if (thumb) {
         originalThumbnail = thumb;
+        if (window.setGlobalVar) {
+            window.setGlobalVar('originalThumbnail', originalThumbnail);
+        }
         const videoThumbnailEl = document.getElementById('videoThumbnail');
         videoThumbnailEl.src = originalThumbnail;
         videoThumbnailEl.style.display = 'block';
@@ -167,6 +177,9 @@ async function handleExistingVideo(fId, thumb, vInfo, filename) {
     
     if (vInfo) {
         videoInfo = vInfo;
+        if (window.setGlobalVar) {
+            window.setGlobalVar('videoInfo', videoInfo);
+        }
         displayVideoInfo(videoInfo, originalFilename);
     }
     
@@ -370,20 +383,20 @@ function displayPreviewFrames(result, template) {
     if (isAdjusted) {
         previewHtml += `
             <div class="recommendation-warning">
-                ${ICONS.warning} 主體位置已調整以適應模板尺寸
+                ${window.AdaptVideo && window.AdaptVideo.ICONS ? window.AdaptVideo.ICONS.warning : '⚠️'} 主體位置已調整以適應模板尺寸
             </div>
         `;
     } else {
         previewHtml += `
             <div class="recommendation-success">
-                ${ICONS.check} 完美適配，主體位置無需調整
+                ${window.AdaptVideo && window.AdaptVideo.ICONS ? window.AdaptVideo.ICONS.check : '✅'} 完美適配，主體位置無需調整
             </div>
         `;
     }
     
     previewHtml += `
         <button class="btn btn-primary" id="previewConvertBtn">
-            ${ICONS.download} 開始轉換
+            ${window.AdaptVideo && window.AdaptVideo.ICONS ? window.AdaptVideo.ICONS.download : '📥'} 開始轉換
         </button>
     </div>`;
     
@@ -404,22 +417,73 @@ function displayPreviewFrames(result, template) {
 }
 
 function displayOriginalPreview(result) {
-    const container = document.getElementById('originalPreviewContainer');
-    if (!container) return;
+    const frames = result.preview_frames || [];
+    if (frames.length === 0) return;
     
-    let previewHtml = `
-        <div class="preview-section">
-            <h4>🎬 原始影片預覽</h4>
-            <div class="preview-frames">
-    `;
+    const videoThumbnail = document.getElementById('videoThumbnail');
+    const previewBtn = document.getElementById('originalPreviewBtn');
     
-    result.preview_frames.forEach((frame, index) => {
-        previewHtml += `<img src="${frame}" alt="Original Preview ${index + 1}" style="max-width: 250px; margin: 4px; border-radius: 4px;">`;
-    });
+    if (!videoThumbnail || !previewBtn) return;
     
-    previewHtml += '</div></div>';
-    container.innerHTML = previewHtml;
+    // 保存原始縮圖以便恢復
+    const originalSrc = videoThumbnail.src;
+    let currentFrameIndex = 0;
+    let animationInterval = null;
+    let isPlaying = false;
+    
+    // 播放一輪動畫
+    function playOneCycle() {
+        if (isPlaying) return; // 防止重複點擊
+        
+        isPlaying = true;
+        currentFrameIndex = 0;
+        previewBtn.textContent = '⏸ 播放中...';
+        previewBtn.disabled = true; // 播放時禁用按鈕
+        
+        // 立即顯示第一幀
+        videoThumbnail.src = frames[0];
+        
+        let frameCount = 0;
+        const totalFrames = frames.length;
+        
+        // 設置動畫播放
+        animationInterval = setInterval(() => {
+            frameCount++;
+            currentFrameIndex = frameCount % totalFrames;
+            videoThumbnail.src = frames[currentFrameIndex];
+            
+            // 播放完一輪後停止
+            if (frameCount >= totalFrames) {
+                setTimeout(() => {
+                    stopAnimation();
+                }, 200); // 等待最後一幀顯示完成
+            }
+        }, 200); // 固定 200ms 速度
+    }
+    
+    // 停止動畫並恢復
+    function stopAnimation() {
+        if (animationInterval) {
+            clearInterval(animationInterval);
+            animationInterval = null;
+        }
+        
+        // 恢復原始縮圖
+        videoThumbnail.src = originalSrc;
+        previewBtn.textContent = '🎬 動態預覽';
+        previewBtn.disabled = false;
+        isPlaying = false;
+    }
+    
+    // 移除原始的點擊事件
+    const newBtn = previewBtn.cloneNode(true);
+    newBtn.id = 'originalPreviewBtn'; // 確保保留 ID
+    previewBtn.parentNode.replaceChild(newBtn, previewBtn);
+    
+    // 添加新的點擊事件 - 每次點擊播放一輪
+    newBtn.addEventListener('click', playOneCycle);
 }
+
 
 function loadHistoryPage() {
     if (window.AdaptVideoAPI && window.AdaptVideoAPI.loadVideoHistory) {
@@ -463,6 +527,228 @@ function setupManualTab() {
     });
 }
 
+function displayVideoComparison(comparisonData) {
+    const comparisonContent = document.getElementById('comparisonContent');
+    if (!comparisonContent) return;
+    
+    const original = comparisonData.original;
+    const converted = comparisonData.converted;
+    
+    if (!original || !converted) {
+        comparisonContent.innerHTML = '<div style="text-align: center; padding: 20px; color: red;">無法載入影片資料</div>';
+        return;
+    }
+    
+    // 計算影片顯示尺寸，維持原始比例但大小相近
+    const maxDisplayWidth = 400;  // 最大顯示寬度
+    const maxDisplayHeight = 300; // 最大顯示高度
+    
+    function calculateDisplaySize(width, height) {
+        if (!width || !height) return { width: maxDisplayWidth, height: maxDisplayHeight };
+        
+        const aspectRatio = width / height;
+        let displayWidth, displayHeight;
+        
+        if (aspectRatio > 1) {
+            // 橫向影片
+            displayWidth = Math.min(maxDisplayWidth, width);
+            displayHeight = displayWidth / aspectRatio;
+            if (displayHeight > maxDisplayHeight) {
+                displayHeight = maxDisplayHeight;
+                displayWidth = displayHeight * aspectRatio;
+            }
+        } else {
+            // 直向影片
+            displayHeight = Math.min(maxDisplayHeight, height);
+            displayWidth = displayHeight * aspectRatio;
+            if (displayWidth > maxDisplayWidth) {
+                displayWidth = maxDisplayWidth;
+                displayHeight = displayWidth / aspectRatio;
+            }
+        }
+        
+        return { 
+            width: Math.round(displayWidth), 
+            height: Math.round(displayHeight) 
+        };
+    }
+    
+    const originalDisplaySize = calculateDisplaySize(original.info.width, original.info.height);
+    const convertedDisplaySize = calculateDisplaySize(converted.info.width, converted.info.height);
+    
+    const comparisonHtml = `
+        <div class="comparison-container">
+            <!-- 原始影片 -->
+            <div class="comparison-video">
+                <h5>📹 原始影片</h5>
+                <div class="comparison-video-player">
+                    <video 
+                        id="originalVideo"
+                        src="${original.url}"
+                        style="width: ${originalDisplaySize.width}px; height: ${originalDisplaySize.height}px;"
+                        controls
+                        muted
+                        preload="metadata"
+                        onloadedmetadata="this.currentTime = 0.1">
+                        您的瀏覽器不支援影片播放
+                    </video>
+                </div>
+                <div class="comparison-controls">
+                    <button class="video-control-btn" onclick="toggleVideoPlayback('originalVideo')">
+                        <span>▶</span> 播放/暫停
+                    </button>
+                    <button class="video-control-btn" onclick="restartVideo('originalVideo')">
+                        <span>🔄</span> 重新播放
+                    </button>
+                </div>
+                <div class="comparison-info">
+                    <div class="comparison-info-item">
+                        <span>檔案:</span>
+                        <span title="${original.filename}">${original.filename.length > 20 ? original.filename.substring(0, 20) + '...' : original.filename}</span>
+                    </div>
+                    <div class="comparison-info-item">
+                        <span>尺寸:</span>
+                        <span>${original.info.width || '未知'} × ${original.info.height || '未知'}</span>
+                    </div>
+                    <div class="comparison-info-item">
+                        <span>長寬比:</span>
+                        <span>${original.info.width && original.info.height ? 
+                            (original.info.width / original.info.height).toFixed(2) + ':1' : '未知'}</span>
+                    </div>
+                    <div class="comparison-info-item">
+                        <span>時長:</span>
+                        <span>${original.info.duration ? original.info.duration.toFixed(1) : '未知'} 秒</span>
+                    </div>
+                    <div class="comparison-info-item">
+                        <span>幀率:</span>
+                        <span>${original.info.fps ? original.info.fps.toFixed(1) : '未知'} fps</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 轉換後影片 -->
+            <div class="comparison-video">
+                <h5>✨ 轉換後影片</h5>
+                <div class="comparison-video-player">
+                    <video 
+                        id="convertedVideo"
+                        src="${converted.url}"
+                        style="width: ${convertedDisplaySize.width}px; height: ${convertedDisplaySize.height}px;"
+                        controls
+                        muted
+                        preload="metadata"
+                        onloadedmetadata="this.currentTime = 0.1">
+                        您的瀏覽器不支援影片播放
+                    </video>
+                </div>
+                <div class="comparison-controls">
+                    <button class="video-control-btn" onclick="toggleVideoPlayback('convertedVideo')">
+                        <span>▶</span> 播放/暫停
+                    </button>
+                    <button class="video-control-btn" onclick="restartVideo('convertedVideo')">
+                        <span>🔄</span> 重新播放
+                    </button>
+                    <button class="video-control-btn" onclick="syncVideos()">
+                        <span>🔗</span> 同步播放
+                    </button>
+                </div>
+                <div class="comparison-info">
+                    <div class="comparison-info-item">
+                        <span>檔案:</span>
+                        <span title="${converted.filename}">${converted.filename.length > 20 ? converted.filename.substring(0, 20) + '...' : converted.filename}</span>
+                    </div>
+                    <div class="comparison-info-item">
+                        <span>尺寸:</span>
+                        <span>${converted.info.width || '未知'} × ${converted.info.height || '未知'}</span>
+                    </div>
+                    <div class="comparison-info-item">
+                        <span>長寬比:</span>
+                        <span>${converted.info.width && converted.info.height ? 
+                            (converted.info.width / converted.info.height).toFixed(2) + ':1' : '未知'}</span>
+                    </div>
+                    <div class="comparison-info-item">
+                        <span>時長:</span>
+                        <span>${converted.info.duration ? converted.info.duration.toFixed(1) : '未知'} 秒</span>
+                    </div>
+                    <div class="comparison-info-item">
+                        <span>幀率:</span>
+                        <span>${converted.info.fps ? converted.info.fps.toFixed(1) : '未知'} fps</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="comparison-notes">
+            <p><strong>使用說明：</strong></p>
+            <ul>
+                <li>點擊播放器或按鈕控制影片播放</li>
+                <li>使用「同步播放」讓兩個影片同時播放以便比較</li>
+                <li>影片已依比例縮放以便於比較，實際尺寸請參考資訊欄</li>
+            </ul>
+        </div>
+    `;
+    
+    comparisonContent.innerHTML = comparisonHtml;
+    
+    // 初始化影片控制函數
+    initializeVideoComparison();
+    
+    // 初始化關閉按鈕
+    const closeBtn = document.getElementById('closeCompareBtn');
+    if (closeBtn) {
+        closeBtn.addEventListener('click', () => {
+            document.getElementById('comparisonSection').style.display = 'none';
+        });
+    }
+}
+
+function initializeVideoComparison() {
+    // 全局變量來跟蹤同步播放狀態
+    window.videoSyncEnabled = false;
+}
+
+// 影片控制函數
+function toggleVideoPlayback(videoId) {
+    const video = document.getElementById(videoId);
+    if (!video) return;
+    
+    if (video.paused) {
+        video.play();
+    } else {
+        video.pause();
+    }
+}
+
+function restartVideo(videoId) {
+    const video = document.getElementById(videoId);
+    if (!video) return;
+    
+    video.currentTime = 0;
+    video.play();
+}
+
+function syncVideos() {
+    const originalVideo = document.getElementById('originalVideo');
+    const convertedVideo = document.getElementById('convertedVideo');
+    
+    if (!originalVideo || !convertedVideo) return;
+    
+    // 同步到原始影片的時間點
+    convertedVideo.currentTime = originalVideo.currentTime;
+    
+    // 如果原始影片在播放，則同時播放轉換後的影片
+    if (!originalVideo.paused) {
+        convertedVideo.play();
+    } else {
+        convertedVideo.pause();
+    }
+    
+    // 顯示同步完成提示
+    if (window.AdaptVideo && window.AdaptVideo.showStatus) {
+        window.AdaptVideo.showStatus('影片已同步', 'success');
+    }
+}
+
 // 導出到全域作用域
 window.AdaptVideoUI = {
     initializeNavigation,
@@ -482,6 +768,13 @@ window.AdaptVideoUI = {
     generateAndDisplayPreview,
     displayPreviewFrames,
     displayOriginalPreview,
+    displayVideoComparison,
+    initializeVideoComparison,
     loadHistoryPage,
     setupManualTab
 };
+
+// 將影片控制函數添加到全局作用域以便 HTML 調用
+window.toggleVideoPlayback = toggleVideoPlayback;
+window.restartVideo = restartVideo;
+window.syncVideos = syncVideos;

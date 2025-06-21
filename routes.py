@@ -229,7 +229,8 @@ def convert_video_api():
     return format_success_response({
         "file_id": file_id,
         "download_url": f"/outputs/{output_filename}",
-        "filename": output_filename
+        "filename": output_filename,
+        "converted_video_path": output_path  # 添加完整路徑供預覽使用
     })
 
 @api.route('/api/preview_crop', methods=['POST'])

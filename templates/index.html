@@ -69,7 +69,6 @@
                                     <button id="originalPreviewBtn" class="btn btn-secondary" style="position: absolute; top: 8px; right: 8px; font-size: 11px; padding: 4px 8px;">
                                         🎬 動態預覽
                                     </button>
-                                    <div id="originalPreviewContainer"></div>
                                 </div>
                                 
                                 <div style="display: flex; flex-direction: column; gap: 12px;">
@@ -147,9 +146,27 @@
 
                     <!-- 下載區域 -->
                     <div style="margin-top: 20px; text-align: center;">
-                        <a id="downloadBtn" class="btn btn-primary" style="display: none;" download>
-                            📥 下載轉換後的影片
-                        </a>
+                        <div id="downloadSection" style="display: none;">
+                            <a id="downloadBtn" class="btn btn-primary" download>
+                                📥 下載轉換後的影片
+                            </a>
+                            <button id="compareBtn" class="btn btn-secondary" style="margin-left: 12px;">
+                                🔄 原始vs轉換對比
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- 比較區域 -->
+                    <div id="comparisonSection" style="display: none;">
+                        <div class="content-section">
+                            <div class="section-title">
+                                <span class="icon">🔄</span>原始影片 vs 轉換後影片
+                                <button id="closeCompareBtn" class="btn btn-secondary" style="float: right; font-size: 12px; padding: 4px 8px;">
+                                    關閉比較
+                                </button>
+                            </div>
+                            <div id="comparisonContent"></div>
+                        </div>
                     </div>
 
                     <!-- 狀態訊息 -->

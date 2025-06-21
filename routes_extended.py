@@ -265,3 +265,266 @@ def generate_original_preview():
         print(f"❌ 生成原始影片預覽失敗: {e}")
         traceback.print_exc()
         return format_error_response("生成原始影片預覽失敗", 500)
+
+@api_extended.route('/api/generate_converted_preview', methods=['POST'])
+@validate_json_request(['file_id'])
+def generate_converted_preview():
+    print("=== 進入 generate_converted_preview API ===")
+    """為轉換後的影片生成動態預覽"""
+    data = request.json
+    file_id = data.get('file_id')
+    
+    print(f"🔍 搜尋轉換後檔案，file_id: {file_id}")
+    
+    # 方法1: 從資料庫中查找轉換記錄
+    converted_video_path = None
+    video_data = get_video_data(file_id)
+    
+    if video_data and 'converted_videos' in video_data:
+        conversions = video_data['converted_videos']
+        print(f"🔍 找到 {len(conversions)} 個轉換記錄")
+        
+        # 取最新的轉換記錄
+        if conversions:
+            latest_conversion = conversions[-1]  # 最後一個（最新的）
+            potential_path = latest_conversion.get('path')
+            print(f"🔍 最新轉換檔案路徑: {potential_path}")
+            
+            if potential_path and os.path.exists(potential_path):
+                converted_video_path = potential_path
+                print(f"✅ 從資料庫找到轉換後檔案: {os.path.basename(potential_path)}")
+    
+    # 方法2: 如果資料庫中沒有，掃描輸出資料夾
+    if not converted_video_path:
+        print(f"🔍 資料庫中沒有找到，嘗試掃描輸出資料夾: {config.OUTPUT_FOLDER}")
+        try:
+            if os.path.exists(config.OUTPUT_FOLDER):
+                all_files = os.listdir(config.OUTPUT_FOLDER)
+                print(f"🔍 輸出資料夾中的所有檔案: {all_files}")
+                
+                # 搜尋模式: {file_id}_converted.{任何副檔名}
+                target_prefix = f"{file_id}_converted"
+                print(f"🔍 搜尋模式: {target_prefix}.*")
+                
+                for filename in all_files:
+                    print(f"🔍 檢查檔案: '{filename}' 是否以 '{target_prefix}' 開頭")
+                    if filename.startswith(target_prefix):
+                        potential_path = os.path.join(config.OUTPUT_FOLDER, filename)
+                        if os.path.isfile(potential_path):
+                            converted_video_path = potential_path
+                            print(f"✅ 掃描找到轉換後檔案: {filename}")
+                            break
+        except Exception as e:
+            print(f"❌ 掃描輸出資料夾失敗: {e}")
+            
+    # 方法3: 直接嘗試已知的檔案名
+    if not converted_video_path:
+        direct_filename = f"{file_id}_converted.mp4"
+        direct_path = os.path.join(config.OUTPUT_FOLDER, direct_filename)
+        print(f"🔍 直接嘗試檔案: {direct_path}")
+        if os.path.exists(direct_path):
+            converted_video_path = direct_path
+            print(f"✅ 直接找到檔案: {direct_filename}")
+    
+    if not converted_video_path:
+        print(f"❌ 找不到 file_id {file_id} 的轉換後影片檔案")
+        return format_error_response(f"找不到 file_id {file_id} 的轉換後影片檔案", 404)
+
+    try:
+        # 計算需要提取的幀數
+        import cv2
+        cap = cv2.VideoCapture(converted_video_path)
+        if not cap.isOpened():
+            return format_error_response("無法開啟轉換後的影片檔案", 500)
+        
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        cap.release()
+        
+        if total_frames <= 0:
+            return format_error_response("轉換後影片無有效幀", 500)
+            
+        num_preview_frames = min(8, max(4, max(1, total_frames // 20)))
+        if total_frames < 20:
+            num_preview_frames = min(total_frames, 4)
+        
+        # 使用共用函數提取幀，並設定最大寬度為300px
+        pil_frames = extract_frames_generic(
+            converted_video_path, num_preview_frames, 
+            return_pil=True, max_width=config.DEFAULT_PREVIEW_MAX_WIDTH, quality=85
+        )
+        
+        if not pil_frames:
+            return format_error_response("無法提取轉換後影片的預覽幀", 500)
+        
+        # 將PIL圖像轉為base64
+        preview_frames = []
+        for img in pil_frames:
+            buffered = BytesIO()
+            img.save(buffered, format="JPEG", quality=85)
+            img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")
+            preview_frames.append(f"data:image/jpeg;base64,{img_str}")
+        
+        # 獲取轉換後影片的基本資訊
+        cap = cv2.VideoCapture(converted_video_path)
+        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        duration = frame_count / fps if fps > 0 else 0
+        cap.release()
+        
+        print(f"✅ 成功生成轉換後影片 {len(preview_frames)} 個預覽幀")
+        return jsonify({
+            "preview_frames": preview_frames,
+            "frame_count": len(preview_frames),
+            "video_info": {
+                "width": width,
+                "height": height,
+                "fps": round(fps, 2),
+                "duration": round(duration, 2),
+                "total_frames": frame_count
+            }
+        })
+
+    except Exception as e:
+        print(f"❌ 生成轉換後影片預覽失敗: {e}")
+        traceback.print_exc()
+        return format_error_response("生成轉換後影片預覽失敗", 500)
+
+@api_extended.route('/api/debug_conversions/<file_id>', methods=['GET'])
+def debug_conversions(file_id):
+    """調試端點：檢查轉換檔案狀態"""
+    print(f"🔧 調試 file_id: {file_id}")
+    
+    # 檢查資料庫
+    video_data = get_video_data(file_id)
+    conversions = []
+    if video_data:
+        conversions = video_data.get('converted_videos', [])
+    
+    # 檢查輸出資料夾
+    output_files = []
+    if os.path.exists(config.OUTPUT_FOLDER):
+        all_files = os.listdir(config.OUTPUT_FOLDER)
+        output_files = [f for f in all_files if file_id in f]
+    
+    debug_info = {
+        "file_id": file_id,
+        "output_folder": config.OUTPUT_FOLDER,
+        "output_folder_exists": os.path.exists(config.OUTPUT_FOLDER),
+        "database_conversions": conversions,
+        "output_files": output_files,
+        "video_data_exists": video_data is not None
+    }
+    
+    return jsonify(debug_info)
+
+@api_extended.route('/api/test_converted_preview', methods=['POST'])
+def test_converted_preview():
+    """測試端點：簡化版的轉換後預覽"""
+    print("=== 測試轉換後預覽 API ===")
+    
+    try:
+        data = request.get_json()
+        file_id = data.get('file_id')
+        print(f"收到 file_id: {file_id}")
+        
+        if not file_id:
+            return jsonify({"error": "缺少 file_id"}), 400
+            
+        # 簡單檢查檔案是否存在
+        test_path = os.path.join(config.OUTPUT_FOLDER, f"{file_id}_converted.mp4")
+        print(f"檢查檔案: {test_path}")
+        print(f"檔案存在: {os.path.exists(test_path)}")
+        
+        if os.path.exists(test_path):
+            return jsonify({"success": True, "message": "檔案存在", "path": test_path})
+        else:
+            return jsonify({"success": False, "message": "檔案不存在", "path": test_path}), 404
+            
+    except Exception as e:
+        print(f"測試 API 錯誤: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@api_extended.route('/api/get_video_comparison_data', methods=['POST'])
+@validate_json_request(['file_id'])
+def get_video_comparison_data():
+    """獲取影片比較所需的資料（原始和轉換後影片的URL和資訊）"""
+    data = request.json
+    file_id = data.get('file_id')
+    
+    print(f"🎬 獲取影片比較資料，file_id: {file_id}")
+    
+    # 獲取原始影片資料
+    video_data = get_video_data(file_id)
+    if not video_data:
+        return format_error_response(f"找不到影片資料: {file_id}", 404)
+    
+    # 原始影片路徑和資訊
+    original_path = find_video_file(file_id)
+    if not original_path:
+        return format_error_response(f"找不到原始影片檔案: {file_id}", 404)
+    
+    original_filename = os.path.basename(original_path)
+    original_url = f"/uploads/{original_filename}"
+    original_info = video_data.get('video_info', {})
+    
+    # 查找轉換後影片
+    converted_video_path = None
+    converted_info = {}
+    converted_url = None
+    
+    # 方法1: 從資料庫中查找轉換記錄
+    if 'converted_videos' in video_data:
+        conversions = video_data['converted_videos']
+        if conversions:
+            latest_conversion = conversions[-1]  # 最新的轉換
+            potential_path = latest_conversion.get('path')
+            if potential_path and os.path.exists(potential_path):
+                converted_video_path = potential_path
+    
+    # 方法2: 直接查找
+    if not converted_video_path:
+        target_prefix = f"{file_id}_converted"
+        if os.path.exists(config.OUTPUT_FOLDER):
+            for filename in os.listdir(config.OUTPUT_FOLDER):
+                if filename.startswith(target_prefix):
+                    potential_path = os.path.join(config.OUTPUT_FOLDER, filename)
+                    if os.path.isfile(potential_path):
+                        converted_video_path = potential_path
+                        break
+    
+    if not converted_video_path:
+        return format_error_response(f"找不到轉換後的影片檔案", 404)
+    
+    converted_filename = os.path.basename(converted_video_path)
+    converted_url = f"/outputs/{converted_filename}"
+    
+    # 獲取轉換後影片的資訊
+    try:
+        import cv2
+        cap = cv2.VideoCapture(converted_video_path)
+        if cap.isOpened():
+            converted_info = {
+                'width': int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)),
+                'height': int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)),
+                'fps': cap.get(cv2.CAP_PROP_FPS),
+                'frame_count': int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+            }
+            converted_info['duration'] = converted_info['frame_count'] / converted_info['fps'] if converted_info['fps'] > 0 else 0
+        cap.release()
+    except Exception as e:
+        print(f"❌ 獲取轉換後影片資訊失敗: {e}")
+    
+    return jsonify({
+        'original': {
+            'url': original_url,
+            'filename': original_filename,
+            'info': original_info
+        },
+        'converted': {
+            'url': converted_url,
+            'filename': converted_filename,
+            'info': converted_info
+        }
+    })

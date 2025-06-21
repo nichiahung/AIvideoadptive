@@ -72,3 +72,33 @@ window.AdaptVideo = {
     resetUIForNewVideo,
     getOriginalFileName
 };
+
+// 創建全域變數訪問器
+window.getGlobalVar = function(name) {
+    switch(name) {
+        case 'selectedFile': return selectedFile;
+        case 'selectedTemplate': return selectedTemplate;
+        case 'fileId': return fileId;
+        case 'selectedLLMSubjects': return selectedLLMSubjects;
+        case 'originalThumbnail': return originalThumbnail;
+        case 'videoInfo': return videoInfo;
+        case 'allTemplates': return allTemplates;
+        case 'allSubjects': return allSubjects;
+        case 'originalFilename': return originalFilename;
+        default: return undefined;
+    }
+};
+
+window.setGlobalVar = function(name, value) {
+    switch(name) {
+        case 'selectedFile': selectedFile = value; break;
+        case 'selectedTemplate': selectedTemplate = value; break;
+        case 'fileId': fileId = value; break;
+        case 'selectedLLMSubjects': selectedLLMSubjects = value; break;
+        case 'originalThumbnail': originalThumbnail = value; break;
+        case 'videoInfo': videoInfo = value; break;
+        case 'allTemplates': allTemplates = value; break;
+        case 'allSubjects': allSubjects = value; break;
+        case 'originalFilename': originalFilename = value; break;
+    }
+};

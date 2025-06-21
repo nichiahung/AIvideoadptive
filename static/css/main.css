@@ -796,6 +796,233 @@ body {
 }
 
 /* === 響應式設計 === */
+/* === 動態預覽按鈕樣式 === */
+#originalPreviewBtn {
+    transition: background 0.2s ease;
+}
+
+#originalPreviewBtn:hover {
+    background: var(--gray-600) !important;
+    color: white !important;
+}
+
+/* === 影片比較樣式 === */
+#comparisonSection {
+    margin-top: 24px;
+}
+
+.comparison-container {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    margin-top: 16px;
+}
+
+.comparison-video {
+    background: var(--gray-50);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--border-radius);
+    padding: 16px;
+    text-align: center;
+}
+
+.comparison-video h5 {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--gray-700);
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.comparison-preview {
+    position: relative;
+    background: black;
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 12px;
+    min-height: 200px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.comparison-frame {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+}
+
+.comparison-frames {
+    position: relative;
+    width: 100%;
+    height: 200px;
+}
+
+.comparison-animated-frame {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    opacity: 0;
+    transition: opacity 0.3s ease-in-out;
+}
+
+.comparison-animated-frame.active {
+    opacity: 1;
+}
+
+.comparison-controls {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    font-size: 12px;
+}
+
+.comparison-play-btn {
+    background: var(--primary);
+    color: white;
+    border: none;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.comparison-play-btn:hover {
+    background: var(--primary-hover);
+}
+
+/* 影片比較專用樣式 */
+.comparison-video-player {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin: 16px 0;
+    background: #000;
+    border-radius: 8px;
+    padding: 8px;
+}
+
+.comparison-video-player video {
+    border-radius: 4px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.video-control-btn {
+    background: var(--primary);
+    color: white;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin: 0 4px;
+}
+
+.video-control-btn:hover {
+    background: var(--primary-hover);
+    transform: translateY(-1px);
+}
+
+.video-control-btn:active {
+    transform: translateY(0);
+}
+
+.comparison-notes {
+    margin-top: 24px;
+    padding: 16px;
+    background: var(--gray-50);
+    border-radius: 8px;
+    border-left: 4px solid var(--primary);
+}
+
+.comparison-notes p {
+    margin: 0 0 8px 0;
+    color: var(--gray-700);
+    font-weight: 600;
+}
+
+.comparison-notes ul {
+    margin: 0;
+    padding-left: 20px;
+    color: var(--gray-600);
+}
+
+.comparison-notes li {
+    margin-bottom: 4px;
+    font-size: 14px;
+}
+
+/* 影片資訊欄位調整 */
+.comparison-info {
+    background: var(--gray-50);
+    border-radius: 6px;
+    padding: 12px;
+    margin-top: 12px;
+}
+
+.comparison-info-item {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 6px;
+    font-size: 13px;
+}
+
+.comparison-info-item:last-child {
+    margin-bottom: 0;
+}
+
+.comparison-info-item span:first-child {
+    font-weight: 600;
+    color: var(--gray-700);
+    min-width: 60px;
+}
+
+.comparison-info-item span:last-child {
+    color: var(--gray-600);
+    text-align: right;
+    word-break: break-all;
+}
+
+.comparison-play-btn.playing {
+    background: var(--error);
+}
+
+.comparison-info {
+    font-size: 12px;
+    color: var(--gray-600);
+    margin-top: 8px;
+    padding: 8px;
+    background: var(--gray-100);
+    border-radius: 4px;
+    text-align: left;
+}
+
+.comparison-info-item {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 4px;
+}
+
+.comparison-info-item:last-child {
+    margin-bottom: 0;
+}
+
+@media (max-width: 768px) {
+    .comparison-container {
+        grid-template-columns: 1fr;
+        gap: 16px;
+    }
+}
+
 @media (max-width: 768px) {
     .app-container { flex-direction: column; }
     .sidebar { width: 100%; order: 2; border-right: none; border-top: 1px solid var(--gray-200); }

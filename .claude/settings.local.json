@@ -1,7 +1,11 @@
 {
   "permissions": {
     "allow": [
-      "Bash(pip3 install:*)"
+      "Bash(pip3 install:*)",
+      "Bash(rg:*)",
+      "Bash(python3:*)",
+      "Bash(cmd.exe /c \"venv\\Scripts\\activate && python test_working_api.py\")",
+      "Bash(cmd.exe:*)"
     ],
     "deny": []
   }
