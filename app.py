@@ -200,7 +200,7 @@ def extract_frames_from_video(video_path, max_frames=5, attempt=1):
     cap.release()
     return base64_frames
 
-def analyze_video_with_llm(video_path, conversation_history):
+def analyze_video_with_llm(video_path, conversation_history, original_width=None, original_height=None):
     """使用多模態LLM分析影片，基於提供的對話歷史"""
     if not LLM_AI_AVAILABLE: return None
     
@@ -213,33 +213,43 @@ def analyze_video_with_llm(video_path, conversation_history):
 
     template_descriptions = "\\n".join([f"- {t['name']}: {t['width']}x{t['height']} ({t['description']})" for t in DOOH_TEMPLATES])
     
+    # 如果有提供原始影片尺寸，則加入到提示中
+    original_video_info = ""
+    if original_width and original_height:
+        original_video_info = f"**用戶的原始影片尺寸為 {original_width}x{original_height}。**"
+    
     # 構建傳送給OpenAI的messages
     messages = [
         {
             "role": "system",
             "content": f"""
-你是一位專業的**數位戶外廣告 (DOOH) 版位策略總監**。你的任務是分析用戶提供的影片，並以銷售顧問的口吻，提供專注於 DOOH 應用場景的改造建議。
+你是一位專業的**數位戶外廣告 (DOOH) 版位策略顧問**。你的任務是分析用戶提供的影片，並根據其**原生特性（內容、風格、原始尺寸）**，推薦最有效的 DOOH 廣告版位。
 
-**你的職責:**
-1.  **理解對話上下文**: 完整閱讀用戶與你的對話歷史，理解用戶的意圖變化和核心訴求。
-2.  **識別行銷主體**: 在影片畫面中找出最重要的行銷主體（例如：產品、Logo、關鍵人物、標語）。
-3.  **提供 DOOH 版位建議**: 根據影片內容，從可用模板清單中推薦2-3個最適合的尺寸。對於每個推薦的尺寸，你必須同時推薦1-2個**具體的 DOOH 廣告版位**（例如：「信義區商圈 LED 大螢幕」、「捷運站內數位看板」），並簡要說明理由。
-4.  **重要限制**: **你的推薦應嚴格限制在 DOOH 應用場景，並主動避免提出任何社群媒體平台（如 Instagram, TikTok, YouTube）的建議。**
-5.  **格式化輸出**: 你的回應必須是格式完整的 JSON 物件。
+{original_video_info}
+
+**你的核心職責:**
+1.  **分析影片原生特性**: 評估影片的原始尺寸、長寬比、內容風格（例如：快節奏、靜態、視覺焦點是否集中），以及核心行銷訊息。
+2.  **優先推薦無損版位**: 根據影片的**原始長寬比**，從下方的可用尺寸模板中找出**最相近或完全相符**的版位。你應該優先推薦這些可以**無需裁切、直接投放**的版位。在推薦時，必須說明為什麼這些 DOOH 場景（例如：機場的超寬螢幕、百貨公司的直式螢幕）特別適合這支影片的風格與內容。
+3.  **提供轉製裁切建議 (次要)**: 如果你認為透過**智慧裁切**可以讓影片在更多主流、但長寬比不同的 DOOH 版位上取得更好的效果，你可以**額外**建議 1-2 個需要轉換的尺寸。當你提出這類建議時，必須：
+    *   明確告知用戶這需要對影片進行**二次處理**。
+    *   解釋為什麼這樣的裁切是值得的（例如：更能聚焦在產品上、更符合特定場景的視覺震撼力）。
+4.  **識別行銷主體**: 在影片畫面中找出最重要的行銷主體（例如：產品、Logo、關鍵人物、標語），這將作為你提出智慧裁切建議時的依據。
+5.  **重要限制**: 你的推薦應嚴格限制在 DOOH 應用場景，並主動避免提出任何社群媒體平台（如 Instagram, TikTok, YouTube）的建議。
+6.  **格式化輸出**: 你的回應必須是格式完整的 JSON 物件。
 
 **可用尺寸模板:**
 {template_descriptions}
 
 **JSON 輸出格式範例 (專注於 DOOH):**
 {{
-  "suggestions": "### AI 專業建議\\n\\n根據您的影片內容，這款運動鞋充滿動感，我推薦以下兩種 DOOH 投放方案：\\n\\n1.  **推薦尺寸：豎屏9:16 (1080x1920)**\\n    - **最佳版位**：非常適合 **百貨公司化妝品專櫃的直式螢幕** 或 **電梯內的廣告螢幕**。這種格式能在消費者等待或近距離移動時，有效傳遞產品細節，吸引目光。\\n\\n2.  **推薦尺寸：標準16:9 (1920x1080)**\\n    - **最佳版位**：適合投放在 **機場出境大廳的電視牆** 或 **捷運站內的橫幅螢幕**。這是最通用的橫向格式，能在大面積場地中，最大化視覺衝擊力。",
-  "recommended_template_names": ["豎屏9:16", "標準16:9"],
+  "suggestions": "### AI 專業建議\\n\\n您的影片風格動感十足，非常適合戶外大型螢幕。根據您的原始影片尺寸 (1920x1080)，我為您規劃了以下投放策略：\\n\\n**【策略一：原尺寸直接投放】**\\n*   **推薦尺寸：標準16:9 (1920x1080)**\\n    *   **最佳版位**：這與您的影片尺寸完美相符，無需任何修改即可直接投放於 **信義區商圈的 LED 大螢幕** 或 **交通樞紐的橫幅螢幕**。這樣可以完整保留影片的視覺衝擊力，最大化廣告效益。\\n\\n**【策略二：智慧裁切投放】**\\n*   **推薦尺寸：豎屏9:16 (1080x1920)**\\n    *   **最佳版位**：雖然這需要進行智慧裁切，但將視覺焦點鎖定在奔跑的人物上，非常適合投放在 **捷運站月台的直式螢幕** 或 **電梯內的廣告螢幕**，能在近距離吸引乘客目光。",
+  "recommended_template_names": ["標準16:9", "豎屏9:16"],
   "analysis_options": [
     {{
-      "subject": "白色運動鞋",
+      "subject": "奔跑中的人物",
       "importance": "high",
       "confidence": 0.95,
-      "center": [960, 600],
+      "center": [960, 540],
       "thumbnail": "data:image/jpeg;base64,..."
     }}
   ]
@@ -510,8 +520,10 @@ def analyze_video_api():
     if not os.path.exists(video_path):
         return jsonify({"error": "影片檔案不存在"}), 404
     
-    # 傳遞對話歷史給分析函數
-    analysis_result = analyze_video_with_llm(video_path, conversation_history)
+    video_info = video_record.get('video_info', {})
+    
+    # 傳遞對話歷史和影片原始尺寸給分析函數
+    analysis_result = analyze_video_with_llm(video_path, conversation_history, video_info.get('width'), video_info.get('height'))
     
     if not analysis_result:
         return jsonify({"error": "AI分析影片時發生錯誤"}), 500
@@ -521,8 +533,7 @@ def analyze_video_api():
         analysis_result['analysis_options'] = []
 
     # 為每個分析選項生成縮圖
-    video_info = get_video_info(video_path)
-    if video_info['width'] > 0 and video_info['height'] > 0:
+    if video_info.get('width', 0) > 0 and video_info.get('height', 0) > 0:
         for option in analysis_result.get('analysis_options', []):
             center = option.get('center')
             if center:
@@ -539,6 +550,14 @@ def analyze_video_api():
                 box = (x1, y1, x2, y2)
                 thumbnail_b64 = crop_frame_for_thumbnail(video_path, box)
                 option['thumbnail'] = thumbnail_b64
+
+    # 將 LLM 分析結果存回資料庫，以供後續使用（例如多主體裁切）
+    with closing(shelve.open(SHELVE_FILE, writeback=True)) as db:
+        if file_id in db:
+            db[file_id]['llm_analysis'] = analysis_result
+            db[file_id]['llm_analysis_options'] = analysis_result.get('analysis_options', [])
+            db[file_id]['timestamp'] = datetime.now().isoformat()
+            print(f"✅ 已將 LLM 分析結果儲存至資料庫: {file_id}")
 
     return jsonify(analysis_result)
 
@@ -696,10 +715,10 @@ def preview_crop():
 
         half_w, half_h = target_width / 2, target_height / 2
         min_x, max_x = half_w, resized_w - half_w
-        min_y, max_h = half_h, resized_h - half_h
+        min_y, max_y = half_h, resized_h - half_h
         
         final_crop_x = max(min_x, min(desired_center_x, max_x))
-        final_crop_y = max(min_y, min(desired_center_y, max_h))
+        final_crop_y = max(min_y, min(desired_center_y, max_y))
         
         # 檢查主角是否被裁切
         is_subject_cropped = abs(final_crop_x - desired_center_x) > 1 or abs(final_crop_y - desired_center_y) > 1
