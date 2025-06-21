@@ -200,6 +200,103 @@ def extract_frames_from_video(video_path, max_frames=5, attempt=1):
     cap.release()
     return base64_frames
 
+def extract_frames_generic(video_path, num_frames, return_pil=False, max_width=None, quality=85):
+    """通用的幀提取函數，可返回 base64 或 PIL Image"""
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        return []
+    
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    if total_frames <= 0:
+        cap.release()
+        return []
+    
+    # 計算要提取的幀索引
+    frame_indices = []
+    if num_frames > 1 and total_frames > 1:
+        for i in range(num_frames):
+            frame_idx = int(i * (total_frames - 1) / (num_frames - 1))
+            frame_indices.append(min(frame_idx, total_frames - 1))
+    else:
+        frame_indices = [0]
+    
+    frames = []
+    for frame_idx in frame_indices:
+        cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
+        ret, frame = cap.read()
+        if not ret:
+            continue
+        
+        if return_pil:
+            # 轉換為 PIL Image
+            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            img = Image.fromarray(frame_rgb)
+            
+            # 如果指定最大寬度，調整大小
+            if max_width and img.width > max_width:
+                scale = max_width / img.width
+                new_width = int(img.width * scale)
+                new_height = int(img.height * scale)
+                img = img.resize((new_width, new_height), Image.LANCZOS)
+            
+            frames.append(img)
+        else:
+            # 返回 base64
+            _, buffer = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, quality])
+            frames.append(base64.b64encode(buffer).decode("utf-8"))
+    
+    cap.release()
+    return frames
+
+def apply_smart_crop(image, target_width, target_height, center, original_width=None, original_height=None):
+    """應用智慧裁切邏輯，返回裁切後的圖像和是否被調整的標記"""
+    if isinstance(image, np.ndarray):
+        # OpenCV 格式轉 PIL
+        image = Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+    
+    # 獲取原始尺寸
+    if original_width is None:
+        original_width = image.width
+    if original_height is None:
+        original_height = image.height
+    
+    # 計算縮放比例
+    scale = max(target_width / original_width, target_height / original_height)
+    resized_w = int(original_width * scale)
+    resized_h = int(original_height * scale)
+    
+    # 縮放圖像
+    resized_img = image.resize((resized_w, resized_h), Image.LANCZOS)
+    
+    # 計算裁切中心點
+    desired_center_x = center[0] * scale
+    desired_center_y = center[1] * scale
+    
+    # 計算安全範圍
+    half_w = target_width / 2
+    half_h = target_height / 2
+    min_x = half_w
+    max_x = resized_w - half_w
+    min_y = half_h
+    max_y = resized_h - half_h
+    
+    # 確保中心點在安全範圍內
+    final_crop_x = max(min_x, min(desired_center_x, max_x))
+    final_crop_y = max(min_y, min(desired_center_y, max_y))
+    
+    # 檢查是否被調整
+    is_adjusted = abs(final_crop_x - desired_center_x) > 1 or abs(final_crop_y - desired_center_y) > 1
+    
+    # 進行裁切
+    left = int(final_crop_x - half_w)
+    top = int(final_crop_y - half_h)
+    right = int(final_crop_x + half_w)
+    bottom = int(final_crop_y + half_h)
+    
+    cropped_img = resized_img.crop((left, top, right, bottom))
+    
+    return cropped_img, is_adjusted
+
 def analyze_video_with_llm(video_path, conversation_history, original_width=None, original_height=None):
     """使用多模態LLM分析影片，基於提供的對話歷史"""
     if not LLM_AI_AVAILABLE: return None
@@ -400,36 +497,55 @@ def perform_video_conversion(input_path, output_path, target_width, target_heigh
                 if ai_center is not None: crop_center = ai_center
             
             print("📏 MoviePy: 計算縮放與裁切參數...")
-            scale = max(target_width / clip.w, target_height / clip.h)
-            resized_clip = clip.resize(scale)
             
-            # --- 智慧裁切邊界處理 ---
-            # 這是我們希望的中心點
-            desired_center_x = crop_center[0] * scale
-            desired_center_y = crop_center[1] * scale
-
-            # 計算裁切框的半寬和半高
-            half_w = target_width / 2
-            half_h = target_height / 2
-
-            # 計算中心點可以移動的安全範圍
-            min_x = half_w
-            max_x = resized_clip.w - half_w
-            min_y = half_h
-            max_y = resized_clip.h - half_h
-
-            # 確保中心點不會超出安全範圍，避免裁切到影片外的黑邊
-            final_crop_x = max(min_x, min(desired_center_x, max_x))
-            final_crop_y = max(min_y, min(desired_center_y, max_y))
-
-            if (final_crop_x, final_crop_y) != (desired_center_x, desired_center_y):
-                print(f"⚠️ 裁切中心點已調整以避免超出邊界。")
-                print(f"   原始中心: ({desired_center_x:.0f}, {desired_center_y:.0f}) -> 調整後: ({final_crop_x:.0f}, {final_crop_y:.0f})")
-
-            final_clip = resized_clip.crop(
-                x_center=final_crop_x, y_center=final_crop_y,
-                width=target_width, height=target_height
-            )
+            # 使用共用的智慧裁切邏輯
+            # 先從影片中提取一幀來計算裁切參數
+            cap = cv2.VideoCapture(input_path)
+            cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+            ret, frame = cap.read()
+            cap.release()
+            
+            if ret:
+                # 使用共用裁切函數計算參數
+                _, is_adjusted = apply_smart_crop(
+                    frame, target_width, target_height, crop_center,
+                    original_width=clip.w, original_height=clip.h
+                )
+                
+                # 計算MoviePy需要的裁切參數
+                scale = max(target_width / clip.w, target_height / clip.h)
+                resized_clip = clip.resize(scale)
+                
+                # 重新計算裁切中心點（與apply_smart_crop相同的邏輯）
+                desired_center_x = crop_center[0] * scale
+                desired_center_y = crop_center[1] * scale
+                
+                half_w = target_width / 2
+                half_h = target_height / 2
+                min_x = half_w
+                max_x = resized_clip.w - half_w
+                min_y = half_h
+                max_y = resized_clip.h - half_h
+                
+                final_crop_x = max(min_x, min(desired_center_x, max_x))
+                final_crop_y = max(min_y, min(desired_center_y, max_y))
+                
+                if is_adjusted:
+                    print(f"⚠️ 裁切中心點已調整以避免超出邊界。")
+                    print(f"   原始中心: ({desired_center_x:.0f}, {desired_center_y:.0f}) -> 調整後: ({final_crop_x:.0f}, {final_crop_y:.0f})")
+                
+                final_clip = resized_clip.crop(
+                    x_center=final_crop_x, y_center=final_crop_y,
+                    width=target_width, height=target_height
+                )
+            else:
+                # 如果無法讀取幀，使用原始邏輯
+                scale = max(target_width / clip.w, target_height / clip.h)
+                resized_clip = clip.resize(scale)
+                final_clip = resized_clip.crop(
+                    x_center=resized_clip.w / 2, y_center=resized_clip.h / 2,
+                    width=target_width, height=target_height
+                )
             
             temp_audio_filename = f"temp-audio-{uuid.uuid4()}.m4a"
             temp_audio_path = os.path.join(os.path.dirname(output_path), temp_audio_filename)
@@ -705,30 +821,11 @@ def preview_crop():
         image_data = base64.b64decode(base64_image.split(',')[1])
         img = Image.open(BytesIO(image_data))
 
-        # --- 沿用與影片轉換完全相同的智慧裁切邏輯 ---
-        scale = max(target_width / original_width, target_height / original_height)
-        resized_w, resized_h = int(original_width * scale), int(original_height * scale)
-        resized_img = img.resize((resized_w, resized_h), Image.LANCZOS)
-        
-        desired_center_x = center[0] * scale
-        desired_center_y = center[1] * scale
-
-        half_w, half_h = target_width / 2, target_height / 2
-        min_x, max_x = half_w, resized_w - half_w
-        min_y, max_y = half_h, resized_h - half_h
-        
-        final_crop_x = max(min_x, min(desired_center_x, max_x))
-        final_crop_y = max(min_y, min(desired_center_y, max_y))
-        
-        # 檢查主角是否被裁切
-        is_subject_cropped = abs(final_crop_x - desired_center_x) > 1 or abs(final_crop_y - desired_center_y) > 1
-
-        # 進行裁切
-        left = final_crop_x - half_w
-        top = final_crop_y - half_h
-        right = final_crop_x + half_w
-        bottom = final_crop_y + half_h
-        cropped_img = resized_img.crop((left, top, right, bottom))
+        # 使用共用的智慧裁切函數
+        cropped_img, is_subject_cropped = apply_smart_crop(
+            img, target_width, target_height, center,
+            original_width=original_width, original_height=original_height
+        )
         
         # 如果主角被裁切，疊加一個紅色警告圖層
         if is_subject_cropped:
@@ -737,7 +834,6 @@ def preview_crop():
             draw.rectangle([(0, 0), (cropped_img.width, cropped_img.height)], 
                           outline=(255, 80, 80, 200), width=10) # 紅色邊框
             cropped_img = Image.alpha_composite(cropped_img.convert("RGBA"), overlay)
-
 
         # 將結果轉回 Base64
         buffered = BytesIO()
@@ -893,79 +989,48 @@ def generate_preview():
             break
 
     try:
-        # 從影片中提取多個幀
+        # 計算需要提取的幀數
         cap = cv2.VideoCapture(upload_path)
         if not cap.isOpened():
             return jsonify({"error": "無法開啟影片檔案"}), 500
-
+        
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        fps = cap.get(cv2.CAP_PROP_FPS)
+        cap.release()
         
-        print(f"📊 影片信息: total_frames={total_frames}, fps={fps}")
-        
-        # 提取5-8個關鍵幀
         if total_frames <= 0:
-            print(f"❌ 影片幀數為 0，無法提取預覽")
             return jsonify({"error": "影片無有效幀"}), 500
             
-        num_preview_frames = min(6, max(3, max(1, total_frames // 30)))  # 確保至少有1幀
+        num_preview_frames = min(6, max(3, max(1, total_frames // 30)))
         if total_frames < 30:
-            num_preview_frames = min(total_frames, 3)  # 短影片使用較少幀數
+            num_preview_frames = min(total_frames, 3)
         
-        frame_indices = []
-        if num_preview_frames > 1 and total_frames > 1:
-            for i in range(num_preview_frames):
-                frame_idx = int(i * (total_frames - 1) / (num_preview_frames - 1))
-                frame_indices.append(min(frame_idx, total_frames - 1))  # 確保不超出範圍
-        else:
-            frame_indices = [0]  # 只有一幀的情況
-            
-        print(f"🎬 準備提取 {len(frame_indices)} 個預覽幀: {frame_indices}")
+        # 使用共用函數提取幀
+        pil_frames = extract_frames_generic(upload_path, num_preview_frames, return_pil=True)
+        
+        if not pil_frames:
+            return jsonify({"error": "無法提取預覽幀"}), 500
         
         preview_frames = []
         target_width, target_height = template['width'], template['height']
         is_adjusted = False
         
-        for i, frame_idx in enumerate(frame_indices):
-            print(f"🎬 處理第 {i+1}/{len(frame_indices)} 幀，索引: {frame_idx}")
-            cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
-            ret, frame = cap.read()
-            if not ret:
-                print(f"⚠️ 無法讀取幀 {frame_idx}，跳過")
-                continue
-                
-            # 轉換為 PIL Image
-            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            img = Image.fromarray(frame_rgb)
-            original_width, original_height = img.size
-
-            # 執行裁切邏輯（與影片轉換相同）
-            scale = max(target_width / original_width, target_height / original_height)
-            resized_w, resized_h = int(original_width * scale), int(original_height * scale)
-            resized_img = img.resize((resized_w, resized_h), Image.LANCZOS)
+        # 獲取原始影片尺寸
+        video_info = video_data.get('video_info', {})
+        original_width = video_info.get('width', 1920)
+        original_height = video_info.get('height', 1080)
+        
+        for i, img in enumerate(pil_frames):
+            print(f"🎬 處理第 {i+1}/{len(pil_frames)} 幀")
             
-            desired_center_x = center[0] * scale
-            desired_center_y = center[1] * scale
-
-            half_w, half_h = target_width / 2, target_height / 2
-            min_x, max_x = half_w, resized_w - half_w
-            min_y, max_y = half_h, resized_h - half_h
+            # 使用共用的裁切函數
+            cropped_img, frame_adjusted = apply_smart_crop(
+                img, target_width, target_height, center,
+                original_width=original_width, original_height=original_height
+            )
             
-            final_crop_x = max(min_x, min(desired_center_x, max_x))
-            final_crop_y = max(min_y, min(desired_center_y, max_y))
-            
-            # 檢查是否有裁切調整（只需要檢查一次）
-            if not is_adjusted:
-                is_adjusted = abs(final_crop_x - desired_center_x) > 1 or abs(final_crop_y - desired_center_y) > 1
-
-            # 進行裁切
-            left = final_crop_x - half_w
-            top = final_crop_y - half_h
-            right = final_crop_x + half_w
-            bottom = final_crop_y + half_h
-            cropped_img = resized_img.crop((left, top, right, bottom))
-            
-
+            # 記錄是否有調整
+            if not is_adjusted and frame_adjusted:
+                is_adjusted = True
             
             # 調整預覽圖大小以便顯示（最大寬度250px）
             preview_scale = min(250 / target_width, 180 / target_height)
@@ -979,12 +1044,6 @@ def generate_preview():
             cropped_img.save(buffered, format="JPEG", quality=80)
             img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")
             preview_frames.append(f"data:image/jpeg;base64,{img_str}")
-
-        cap.release()
-        
-        if not preview_frames:
-            print(f"❌ 無法提取任何預覽幀，total_frames={total_frames}, frame_indices={frame_indices}")
-            return jsonify({"error": "無法提取預覽幀"}), 500
         
         print(f"✅ 成功生成 {len(preview_frames)} 個預覽幀")
         return jsonify({
@@ -1024,69 +1083,37 @@ def generate_original_preview():
         return jsonify({"error": f"找不到影片檔案: {file_id}"}), 404
 
     try:
-        # 從影片中提取多個幀用於動態預覽
+        # 計算需要提取的幀數
         cap = cv2.VideoCapture(upload_path)
         if not cap.isOpened():
             return jsonify({"error": "無法開啟影片檔案"}), 500
-
+        
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        fps = cap.get(cv2.CAP_PROP_FPS)
+        cap.release()
         
-        print(f"📊 原始影片信息: total_frames={total_frames}, fps={fps}")
-        
-        # 提取5-8個關鍵幀
         if total_frames <= 0:
-            print(f"❌ 影片幀數為 0，無法提取預覽")
             return jsonify({"error": "影片無有效幀"}), 500
             
-        num_preview_frames = min(8, max(4, max(1, total_frames // 20)))  # 更多幀數用於原始預覽
+        num_preview_frames = min(8, max(4, max(1, total_frames // 20)))
         if total_frames < 20:
-            num_preview_frames = min(total_frames, 4)  # 短影片使用較少幀數
+            num_preview_frames = min(total_frames, 4)
         
-        frame_indices = []
-        if num_preview_frames > 1 and total_frames > 1:
-            for i in range(num_preview_frames):
-                frame_idx = int(i * (total_frames - 1) / (num_preview_frames - 1))
-                frame_indices.append(min(frame_idx, total_frames - 1))  # 確保不超出範圍
-        else:
-            frame_indices = [0]  # 只有一幀的情況
-            
-        print(f"🎬 準備提取原始影片 {len(frame_indices)} 個預覽幀: {frame_indices}")
+        # 使用共用函數提取幀，並設定最大寬度為300px
+        pil_frames = extract_frames_generic(
+            upload_path, num_preview_frames, 
+            return_pil=True, max_width=300, quality=85
+        )
         
+        if not pil_frames:
+            return jsonify({"error": "無法提取預覽幀"}), 500
+        
+        # 將PIL圖像轉為base64
         preview_frames = []
-        
-        for i, frame_idx in enumerate(frame_indices):
-            print(f"🎬 處理原始影片第 {i+1}/{len(frame_indices)} 幀，索引: {frame_idx}")
-            cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
-            ret, frame = cap.read()
-            if not ret:
-                print(f"⚠️ 無法讀取幀 {frame_idx}，跳過")
-                continue
-                
-            # 轉換為 PIL Image
-            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            img = Image.fromarray(frame_rgb)
-            
-            # 調整預覽圖大小以便顯示（最大寬度300px，保持比例）
-            original_width, original_height = img.size
-            max_width = 300
-            if original_width > max_width:
-                scale = max_width / original_width
-                preview_w = int(original_width * scale)
-                preview_h = int(original_height * scale)
-                img = img.resize((preview_w, preview_h), Image.LANCZOS)
-
-            # 將結果轉為 Base64
+        for img in pil_frames:
             buffered = BytesIO()
             img.save(buffered, format="JPEG", quality=85)
             img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")
             preview_frames.append(f"data:image/jpeg;base64,{img_str}")
-
-        cap.release()
-        
-        if not preview_frames:
-            print(f"❌ 無法提取任何原始預覽幀，total_frames={total_frames}, frame_indices={frame_indices}")
-            return jsonify({"error": "無法提取預覽幀"}), 500
         
         print(f"✅ 成功生成原始影片 {len(preview_frames)} 個預覽幀")
         return jsonify({
