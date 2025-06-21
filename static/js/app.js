@@ -53,12 +53,29 @@ function resetUIForNewVideo() {
     originalFilename = '';
     conversationHistory = [];
     
+    // 重置手動版位選擇狀態
+    if (window.resetManualPositionState) {
+        window.resetManualPositionState();
+    }
+    
     document.getElementById('videoPreview').style.display = 'none';
     document.getElementById('templatesSection').style.display = 'none';
     document.getElementById('statusMessage').style.display = 'none';
     
     const videoThumbnail = document.getElementById('videoThumbnail');
     if (videoThumbnail) videoThumbnail.style.display = 'none';
+    
+    // 重置版位選擇模式為自動
+    const autoRadio = document.querySelector('input[name="positionMode"][value="auto"]');
+    if (autoRadio) {
+        autoRadio.checked = true;
+    }
+    
+    // 隱藏手動版位選擇器
+    const manualSelector = document.getElementById('manualPositionSelector');
+    if (manualSelector) {
+        manualSelector.style.display = 'none';
+    }
 }
 
 function getOriginalFileName(fId) {

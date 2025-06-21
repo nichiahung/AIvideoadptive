@@ -5,7 +5,10 @@
       "Bash(rg:*)",
       "Bash(python3:*)",
       "Bash(cmd.exe /c \"venv\\Scripts\\activate && python test_working_api.py\")",
-      "Bash(cmd.exe:*)"
+      "Bash(cmd.exe:*)",
+      "Bash(grep:*)",
+      "Bash(python:*)",
+      "Bash(node:*)"
     ],
     "deny": []
   }

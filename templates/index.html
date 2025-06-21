@@ -36,10 +36,51 @@
             <!-- 影片轉換頁面 -->
             <div id="page-converter" class="page active">
                 <div class="container">
+                    <!-- 轉換模式選擇 -->
+                    <div class="content-section">
+                        <div class="section-title">
+                            <span class="icon">🎯</span>選擇轉換模式
+                        </div>
+                        <div class="conversion-mode-selection">
+                            <label class="mode-option" id="smartModeOption">
+                                <input type="radio" name="conversionMode" value="smart" checked>
+                                <div class="mode-content">
+                                    <div class="mode-icon">🤖</div>
+                                    <div class="mode-info">
+                                        <strong>AI 智慧轉換</strong>
+                                        <p>讓 AI 自動分析影片內容，推薦最適合的 DOOH 模板和裁切方式</p>
+                                    </div>
+                                </div>
+                            </label>
+                            
+                            <label class="mode-option" id="manualModeOption">
+                                <input type="radio" name="conversionMode" value="manual">
+                                <div class="mode-content">
+                                    <div class="mode-icon">⚙️</div>
+                                    <div class="mode-info">
+                                        <strong>手動轉換</strong>
+                                        <p>手動選擇模板和裁切模式，適合有特定需求的專業用戶</p>
+                                    </div>
+                                </div>
+                            </label>
+                            
+                            <label class="mode-option" id="positionModeOption">
+                                <input type="radio" name="conversionMode" value="position">
+                                <div class="mode-content">
+                                    <div class="mode-icon">📍</div>
+                                    <div class="mode-info">
+                                        <strong>手動選版位</strong>
+                                        <p>精確控制影片裁切位置，點擊縮圖選擇最佳版位</p>
+                                    </div>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
                     <!-- 影片來源選擇 -->
                     <div class="content-section">
                         <div class="section-title">
-                            <span class="icon">📂</span>影片來源
+                            <span class="icon">📂</span>上傳影片
                         </div>
                         
                         <div class="video-source-selection">
@@ -95,50 +136,90 @@
 
                     <!-- 轉換設定 -->
                     <div id="conversionSection" style="display: none;">
-                        <div class="content-section">
-                            <nav class="tab-navigation">
-                                <div class="tab-nav-item active" data-tab="smart">智慧轉換</div>
-                                <div class="tab-nav-item" data-tab="manual">手動轉換</div>
-                            </nav>
+                        <!-- 智慧轉換內容 -->
+                        <div id="smartConversionSection" class="content-section conversion-content active">
+                            <div class="section-title"><span class="icon">🤖</span>AI 推薦結果</div>
+                            <div id="smartConversionContent">
+                                <div class="spinner"></div>
+                                <p style="text-align: center; color: var(--gray-500); margin-top: 12px;">正在分析影片內容...</p>
+                            </div>
+                        </div>
+
+                        <!-- 手動轉換內容 -->
+                        <div id="manualConversionSection" class="content-section conversion-content">
+                            <div class="section-title"><span class="icon">⚙️</span>手動轉換設定</div>
                             
-                            <!-- 智慧轉換標籤 -->
-                            <div id="tab-smart" class="tab-content active">
-                                <div class="section-title"><span class="icon">🤖</span>AI 推薦結果</div>
-                                <div id="smartConversionContent">
-                                    <div class="spinner"></div>
-                                    <p style="text-align: center; color: var(--gray-500); margin-top: 12px;">正在分析影片內容...</p>
+                            <div class="section-title" style="margin-top: 24px;"><span class="icon">📐</span>選擇輸出尺寸</div>
+                            <div id="templatesGridManual" class="templates-grid"></div>
+                            
+                            <div class="section-title" style="margin-top: 24px;"><span class="icon">✂️</span>裁切模式</div>
+                            <div class="crop-options">
+                                <label class="crop-option">
+                                    <input type="radio" name="cropModeManual" value="center" checked>
+                                    <div class="option-content">
+                                        <strong>置中裁切</strong>
+                                        <p>從影片中心進行裁切</p>
+                                    </div>
+                                </label>
+                                <label class="crop-option" id="llmCropOption" style="display: none;">
+                                    <input type="radio" name="cropModeManual" value="llm">
+                                    <div class="option-content">
+                                        <strong>智慧裁切</strong>
+                                        <p>根據 AI 識別的主要對象進行裁切</p>
+                                    </div>
+                                </label>
+                            </div>
+
+                            <div id="manualSubjectChoices" class="subject-choices" style="margin-top: 16px;"></div>
+
+                            <div style="margin-top: 20px;">
+                                <button class="btn btn-primary" id="convertBtnManual" disabled>
+                                    開始轉換
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- 手動選版位內容 -->
+                        <div id="positionConversionSection" class="content-section conversion-content">
+                            <div class="section-title"><span class="icon">📍</span>手動選版位設定</div>
+                            <div class="position-tab-description">
+                                <p style="color: var(--gray-600); margin-bottom: 20px;">
+                                    在影片縮圖上點擊選擇裁切中心點，系統會根據您選擇的版位和目標尺寸自動計算最佳裁切範圍。
+                                </p>
+                            </div>
+
+                            <!-- 模板選擇區域 -->
+                            <div class="section-title" style="margin-top: 24px;"><span class="icon">📐</span>選擇輸出尺寸</div>
+                            <div id="templatesGridPosition" class="templates-grid"></div>
+                            
+                            <!-- 版位選擇區域 -->
+                            <div class="section-title" style="margin-top: 24px;"><span class="icon">🎯</span>選擇裁切版位</div>
+                            <div class="position-selector">
+                                <div class="position-preview" id="positionPreview">
+                                    <img id="positionPreviewImage" src="" alt="選擇版位" style="max-width: 100%; cursor: crosshair;">
+                                    <div id="cropGuide" class="crop-guide" style="display: none;"></div>
+                                    <div id="centerPoint" class="center-point" style="display: none;"></div>
+                                </div>
+                                <div class="position-instructions">
+                                    <p style="color: var(--gray-600); font-size: 14px; margin-top: 8px;">
+                                        <strong>操作說明：</strong>
+                                    </p>
+                                    <ul style="color: var(--gray-600); font-size: 14px; margin: 8px 0 0 20px;">
+                                        <li>先選擇輸出尺寸模板</li>
+                                        <li>點擊影片縮圖選擇裁切中心點</li>
+                                        <li>紅色框線顯示實際裁切範圍</li>
+                                        <li>可重複點擊調整版位</li>
+                                    </ul>
                                 </div>
                             </div>
 
-                            <!-- 手動轉換標籤 -->
-                            <div id="tab-manual" class="tab-content">
-                                <div class="section-title"><span class="icon">⚙️</span>選擇輸出尺寸</div>
-                                <div id="templatesGridManual" class="templates-grid"></div>
-                                
-                                <div class="section-title" style="margin-top: 24px;"><span class="icon">✂️</span>裁切模式</div>
-                                <div class="crop-options">
-                                    <label class="crop-option">
-                                        <input type="radio" name="cropModeManual" value="center" checked>
-                                        <div class="option-content">
-                                            <strong>置中裁切</strong>
-                                            <p>從影片中心進行裁切</p>
-                                        </div>
-                                    </label>
-                                    <label class="crop-option" id="llmCropOption" style="display: none;">
-                                        <input type="radio" name="cropModeManual" value="llm">
-                                        <div class="option-content">
-                                            <strong>智慧裁切</strong>
-                                            <p>根據 AI 識別的主要對象進行裁切</p>
-                                        </div>
-                                    </label>
-                                </div>
-
-                                <div id="manualSubjectChoices" class="subject-choices" style="margin-top: 16px;"></div>
-
-                                <div style="margin-top: 20px;">
-                                    <button class="btn btn-primary" id="convertBtnManual" disabled>
-                                        開始轉換
-                                    </button>
+                            <!-- 轉換按鈕 -->
+                            <div style="margin-top: 24px;">
+                                <button class="btn btn-primary" id="convertBtnPosition" disabled>
+                                    🎬 開始轉換
+                                </button>
+                                <div id="positionStatus" style="margin-top: 12px; font-size: 14px; color: var(--gray-600);">
+                                    請先選擇輸出尺寸模板
                                 </div>
                             </div>
                         </div>

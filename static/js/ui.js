@@ -18,16 +18,31 @@ function initializeNavigation() {
 }
 
 function initializeTabs() {
-    document.querySelectorAll('.tab-nav-item').forEach(item => {
-        item.addEventListener('click', () => {
-            const tabId = `tab-${item.dataset.tab}`;
-            document.querySelectorAll('.tab-content').forEach(p => p.classList.remove('active'));
-            document.getElementById(tabId).classList.add('active');
-            document.querySelectorAll('.tab-nav-item').forEach(n => n.classList.remove('active'));
-            item.classList.add('active');
-            if (item.dataset.tab === 'manual' && fileId) setupManualTab();
-        });
+    // 標籤功能已移除，改為模式選擇
+    console.log('Tabs have been replaced with conversion mode selection');
+}
+
+// 處理轉換模式變化
+function handleConversionModeChange(event) {
+    const selectedMode = event.target.value;
+    
+    // 隱藏所有轉換內容
+    document.querySelectorAll('.conversion-content').forEach(content => {
+        content.classList.remove('active');
     });
+    
+    // 顯示選擇的轉換內容
+    const targetSection = document.getElementById(`${selectedMode}ConversionSection`);
+    if (targetSection) {
+        targetSection.classList.add('active');
+        
+        // 根據模式設置相應的功能
+        if (selectedMode === 'manual' && fileId) {
+            setupManualTab();
+        } else if (selectedMode === 'position' && fileId) {
+            setupPositionTab();
+        }
+    }
 }
 
 function initializeModal() {
@@ -90,9 +105,15 @@ function initializeFileUpload() {
 }
 
 function initializeEventListeners() {
+    // 轉換模式選擇監聽器
+    document.querySelectorAll('input[name="conversionMode"]').forEach(radio => {
+        radio.addEventListener('change', handleConversionModeChange);
+    });
+
     document.getElementById('convertBtnManual').addEventListener('click', () => {
         const cropMode = document.querySelector('input[name="cropModeManual"]:checked').value;
         let center = null;
+        
         if (cropMode === 'llm') {
             const selectedSubjectRadio = document.querySelector('input[name="manualSubjectSelect"]:checked');
             if (selectedSubjectRadio) {
@@ -100,6 +121,24 @@ function initializeEventListeners() {
             } else if (allSubjects.length > 0) {
                 center = allSubjects[0].center;
             }
+        }
+        if (window.AdaptVideoAPI && window.AdaptVideoAPI.startConversion) {
+            window.AdaptVideoAPI.startConversion(selectedTemplate, center);
+        } else {
+            console.error('startConversion function not found');
+        }
+    });
+
+    // 手動選版位的轉換按鈕
+    document.getElementById('convertBtnPosition').addEventListener('click', () => {
+        const center = getManualSelectedPosition();
+        if (!center) {
+            updatePositionStatus('請先在影片縮圖上點擊選擇版位', 'error');
+            return;
+        }
+        if (!currentTemplate) {
+            updatePositionStatus('請先選擇輸出尺寸模板', 'error');
+            return;
         }
         if (window.AdaptVideoAPI && window.AdaptVideoAPI.startConversion) {
             window.AdaptVideoAPI.startConversion(selectedTemplate, center);
@@ -142,6 +181,13 @@ function handleFile(file) {
     window.AdaptVideo && window.AdaptVideo.resetUIForNewVideo ? window.AdaptVideo.resetUIForNewVideo() : null;
     selectedFile = file;
     fileId = null;
+    
+    // 顯示轉換設定區域
+    document.getElementById('conversionSection').style.display = 'block';
+    
+    // 根據當前選擇的模式設置相應的內容
+    const selectedMode = document.querySelector('input[name="conversionMode"]:checked').value;
+    handleConversionModeChange({ target: { value: selectedMode } });
     
     if (window.AdaptVideoAPI && window.AdaptVideoAPI.uploadAndAnalyze) {
         window.AdaptVideoAPI.uploadAndAnalyze(file);
@@ -494,6 +540,9 @@ function loadHistoryPage() {
 }
 
 function setupManualTab() {
+    // 設置模板網格
+    setupManualTemplateGrid();
+    
     const container = document.getElementById('manualSubjectChoices');
     if (!allSubjects || allSubjects.length === 0) {
         container.innerHTML = '<p>尚未進行 AI 分析</p>';
@@ -526,6 +575,284 @@ function setupManualTab() {
         container.appendChild(div);
     });
 }
+
+// 設置手動選版位標籤
+function setupPositionTab() {
+    // 設置模板網格
+    setupPositionTemplateGrid();
+    
+    // 設置版位選擇器
+    setupManualPositionSelector();
+    
+    // 更新狀態
+    updatePositionStatus('請先選擇輸出尺寸模板');
+}
+
+// 設置手動模板網格
+function setupManualTemplateGrid() {
+    const gridContainer = document.getElementById('templatesGridManual');
+    if (!allTemplates || allTemplates.length === 0) {
+        gridContainer.innerHTML = '<p>暫無可用模板</p>';
+        return;
+    }
+    
+    gridContainer.innerHTML = '';
+    allTemplates.forEach(template => {
+        const card = document.createElement('div');
+        card.className = 'template-card';
+        card.innerHTML = `
+            <div class="template-info">
+                <div class="template-name">${template.name}</div>
+                <div class="template-size">${template.width} × ${template.height}</div>
+                <div class="template-desc">${template.description || ''}</div>
+            </div>
+        `;
+        
+        card.addEventListener('click', () => {
+            document.querySelectorAll('#templatesGridManual .template-card').forEach(c => c.classList.remove('selected'));
+            card.classList.add('selected');
+            
+            // 更新當前選擇的模板
+            updateCurrentTemplate(template);
+            
+            // 啟用轉換按鈕
+            const convertBtn = document.getElementById('convertBtnManual');
+            if (convertBtn) {
+                convertBtn.disabled = false;
+            }
+        });
+        
+        gridContainer.appendChild(card);
+    });
+}
+
+// 設置手動選版位模板網格
+function setupPositionTemplateGrid() {
+    const gridContainer = document.getElementById('templatesGridPosition');
+    if (!allTemplates || allTemplates.length === 0) {
+        gridContainer.innerHTML = '<p>暫無可用模板</p>';
+        return;
+    }
+    
+    gridContainer.innerHTML = '';
+    allTemplates.forEach(template => {
+        const card = document.createElement('div');
+        card.className = 'template-card';
+        card.innerHTML = `
+            <div class="template-info">
+                <div class="template-name">${template.name}</div>
+                <div class="template-size">${template.width} × ${template.height}</div>
+                <div class="template-desc">${template.description || ''}</div>
+            </div>
+        `;
+        
+        card.addEventListener('click', () => {
+            document.querySelectorAll('#templatesGridPosition .template-card').forEach(c => c.classList.remove('selected'));
+            card.classList.add('selected');
+            
+            // 更新當前選擇的模板
+            updateCurrentTemplate(template);
+            
+            // 更新狀態
+            if (manualSelectedCenter) {
+                updatePositionStatus('已選擇模板和版位，可以開始轉換', 'success');
+                document.getElementById('convertBtnPosition').disabled = false;
+            } else {
+                updatePositionStatus('請在影片縮圖上點擊選擇版位');
+            }
+        });
+        
+        gridContainer.appendChild(card);
+    });
+}
+
+// 更新手動選版位狀態
+function updatePositionStatus(message, type = 'info') {
+    const statusEl = document.getElementById('positionStatus');
+    if (statusEl) {
+        statusEl.textContent = message;
+        statusEl.className = `position-status ${type}`;
+        
+        // 根據類型設置顏色
+        switch(type) {
+            case 'success':
+                statusEl.style.color = 'var(--success)';
+                break;
+            case 'error':
+                statusEl.style.color = 'var(--error)';
+                break;
+            default:
+                statusEl.style.color = 'var(--gray-600)';
+        }
+    }
+}
+
+// 手動版位選擇相關變數
+let manualSelectedCenter = null;
+let currentTemplate = null;
+
+// 處理版位選擇模式切換
+function handlePositionModeChange(event) {
+    const manualSelector = document.getElementById('manualPositionSelector');
+    if (event.target.value === 'manual') {
+        manualSelector.style.display = 'block';
+        setupManualPositionSelector();
+    } else {
+        manualSelector.style.display = 'none';
+    }
+}
+
+// 設置手動版位選擇器
+function setupManualPositionSelector() {
+    const previewImage = document.getElementById('positionPreviewImage');
+    if (!originalThumbnail) {
+        console.log('originalThumbnail is not available');
+        return;
+    }
+    
+    previewImage.src = originalThumbnail;
+    previewImage.onload = () => {
+        const cropGuide = document.getElementById('cropGuide');
+        const centerPoint = document.getElementById('centerPoint');
+        
+        // 移除舊的事件監聽器（如果存在）
+        previewImage.onclick = null;
+        
+        // 添加點擊事件監聽器
+        previewImage.onclick = (event) => {
+            const rect = previewImage.getBoundingClientRect();
+            const x = event.clientX - rect.left;
+            const y = event.clientY - rect.top;
+            
+            // 計算相對於原始圖片的位置（0-1之間）
+            const relativeX = x / previewImage.clientWidth;
+            const relativeY = y / previewImage.clientHeight;
+            
+            // 儲存選擇的中心點
+            manualSelectedCenter = {
+                x: relativeX,
+                y: relativeY
+            };
+            
+            // 顯示中心點
+            centerPoint.style.left = `${x}px`;
+            centerPoint.style.top = `${y}px`;
+            centerPoint.style.display = 'block';
+            
+            // 如果有選擇的模板，顯示裁切預覽
+            if (currentTemplate) {
+                showCropPreview(relativeX, relativeY);
+                
+                // 更新手動選版位的狀態
+                if (document.getElementById('positionConversionSection').classList.contains('active')) {
+                    updatePositionStatus('已選擇版位和模板，可以開始轉換', 'success');
+                    document.getElementById('convertBtnPosition').disabled = false;
+                }
+            } else {
+                // 如果在手動選版位模式但沒有選擇模板
+                if (document.getElementById('positionConversionSection').classList.contains('active')) {
+                    updatePositionStatus('已選擇版位，請選擇輸出尺寸模板');
+                }
+            }
+            
+            console.log('Manual position selected:', manualSelectedCenter);
+        };
+    };
+    
+    previewImage.onerror = () => {
+        console.error('Failed to load preview image:', originalThumbnail);
+    };
+}
+
+// 顯示裁切預覽
+function showCropPreview(centerX, centerY) {
+    if (!currentTemplate) return;
+    
+    const previewImage = document.getElementById('positionPreviewImage');
+    const cropGuide = document.getElementById('cropGuide');
+    
+    // 計算目標比例
+    const targetAspectRatio = currentTemplate.width / currentTemplate.height;
+    const imageAspectRatio = previewImage.clientWidth / previewImage.clientHeight;
+    
+    let cropWidth, cropHeight;
+    
+    if (targetAspectRatio > imageAspectRatio) {
+        // 目標更寬，以寬度為準
+        cropWidth = previewImage.clientWidth;
+        cropHeight = cropWidth / targetAspectRatio;
+    } else {
+        // 目標更高，以高度為準
+        cropHeight = previewImage.clientHeight;
+        cropWidth = cropHeight * targetAspectRatio;
+    }
+    
+    // 計算裁切框的位置
+    const left = Math.max(0, Math.min(
+        previewImage.clientWidth - cropWidth,
+        centerX * previewImage.clientWidth - cropWidth / 2
+    ));
+    const top = Math.max(0, Math.min(
+        previewImage.clientHeight - cropHeight,
+        centerY * previewImage.clientHeight - cropHeight / 2
+    ));
+    
+    // 顯示裁切框
+    cropGuide.style.left = `${left}px`;
+    cropGuide.style.top = `${top}px`;
+    cropGuide.style.width = `${cropWidth}px`;
+    cropGuide.style.height = `${cropHeight}px`;
+    cropGuide.style.display = 'block';
+}
+
+// 獲取手動選擇的版位
+function getManualSelectedPosition() {
+    return manualSelectedCenter;
+}
+
+// 更新當前選擇的模板（需要在模板選擇時調用）
+function updateCurrentTemplate(template) {
+    currentTemplate = template;
+    selectedTemplate = template;
+    
+    // 如果處於手動版位選擇模式且已選擇中心點，更新預覽
+    const positionMode = document.querySelector('input[name="positionMode"]:checked');
+    if (positionMode && positionMode.value === 'manual' && manualSelectedCenter) {
+        showCropPreview(manualSelectedCenter.x, manualSelectedCenter.y);
+    }
+}
+
+// 重置手動版位選擇狀態
+function resetManualPositionState() {
+    manualSelectedCenter = null;
+    currentTemplate = null;
+    
+    // 隱藏裁切預覽和中心點
+    const cropGuide = document.getElementById('cropGuide');
+    const centerPoint = document.getElementById('centerPoint');
+    const previewImage = document.getElementById('positionPreviewImage');
+    
+    if (cropGuide) cropGuide.style.display = 'none';
+    if (centerPoint) centerPoint.style.display = 'none';
+    if (previewImage) {
+        previewImage.src = '';
+        previewImage.onclick = null;
+    }
+    
+    // 重置轉換按鈕和狀態
+    const convertBtnPosition = document.getElementById('convertBtnPosition');
+    if (convertBtnPosition) {
+        convertBtnPosition.disabled = true;
+    }
+    
+    updatePositionStatus('請先選擇輸出尺寸模板');
+    
+    // 清除模板選擇狀態
+    document.querySelectorAll('#templatesGridPosition .template-card').forEach(c => c.classList.remove('selected'));
+}
+
+// 導出重置函數到全域作用域
+window.resetManualPositionState = resetManualPositionState;
 
 function displayVideoComparison(comparisonData) {
     const comparisonContent = document.getElementById('comparisonContent');
