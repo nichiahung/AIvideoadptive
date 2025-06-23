@@ -8,7 +8,8 @@
       "Bash(cmd.exe:*)",
       "Bash(grep:*)",
       "Bash(python:*)",
-      "Bash(node:*)"
+      "Bash(node:*)",
+      "Bash(ls:*)"
     ],
     "deny": []
   }
